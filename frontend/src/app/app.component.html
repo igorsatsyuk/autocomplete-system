@@ -1,0 +1,21 @@
+<div class="container">
+  <h1>Autocomplete Demo</h1>
+
+  <form (ngSubmit)="onSubmit()" class="search-form">
+    <input
+      type="text"
+      [value]="query"
+      (input)="onInputChange($event.target.value)"
+      placeholder="Type your query..."
+      autocomplete="off"
+    />
+    <button type="submit">Search</button>
+  </form>
+
+  <ul class="suggestions" *ngIf="showSuggestions">
+    <li *ngFor="let s of suggestions$ | async"
+        (click)="onSelectSuggestion(s)">
+      {{ s.query }}
+    </li>
+  </ul>
+</div>

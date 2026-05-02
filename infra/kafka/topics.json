@@ -1,0 +1,7 @@
+{
+  "topics": [
+    { "name": "search-events", "partitions": 3, "replicationFactor": 1 },
+    { "name": "search-stats", "partitions": 3, "replicationFactor": 1 },
+    { "name": "db-changes.public.search_stats", "partitions": 1, "replicationFactor": 1 }
+  ]
+}

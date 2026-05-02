@@ -1,0 +1,31 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: cdc-service
+
+  kafka:
+    bootstrap-servers: kafka:9092
+    consumer:
+      group-id: cdc-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+  data:
+    redis:
+      host: redis
+      port: 6379
+
+logging:
+  level:
+    root: INFO
+    lt.satsyuk.cdc: DEBUG
+
+cdc:
+  topic-pattern: db-changes\.public\.search_stats
+
+autocomplete:
+  redis-prefix: "autocomplete:"
+

@@ -1,0 +1,9 @@
+{
+  "type": "record",
+  "name": "SearchEvent",
+  "namespace": "lt.satsyuk.common.avro",
+  "fields": [
+    { "name": "query", "type": "string" },
+    { "name": "timestamp", "type": "long" }
+  ]
+}

@@ -1,0 +1,21 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: autocomplete-service
+
+  data:
+    redis:
+      host: redis
+      port: 6379
+      # если без docker, можно localhost
+
+logging:
+  level:
+    root: INFO
+    lt.satsyuk.autocomplete: DEBUG
+
+autocomplete:
+  redis-prefix: "autocomplete:"
+

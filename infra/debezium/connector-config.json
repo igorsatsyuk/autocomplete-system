@@ -1,0 +1,17 @@
+{
+  "name": "postgres-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "autocomplete",
+    "database.password": "autocomplete",
+    "database.dbname": "autocomplete",
+    "database.server.name": "pg",
+    "table.include.list": "public.search_stats",
+    "plugin.name": "pgoutput",
+    "slot.name": "autocomplete_slot",
+    "publication.name": "autocomplete_pub",
+    "topic.prefix": "db-changes"
+  }
+}

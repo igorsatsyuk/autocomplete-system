@@ -1,0 +1,207 @@
+version: "3.9"
+
+services:
+
+  ###########################################################################
+  # Redis Stack (Redis + RediSearch)
+  ###########################################################################
+  redis:
+    image: redis/redis-stack:latest
+    ports:
+      - "6379:6379"
+      - "8001:8001"   # RedisInsight UI
+    volumes:
+      - redis-data:/data
+    networks:
+      - autocomplete-net
+
+  ###########################################################################
+  # PostgreSQL (write store)
+  ###########################################################################
+  postgres:
+    image: postgres:16
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_replication_slots=4
+      - -c
+      - max_wal_senders=4
+    environment:
+      POSTGRES_USER: autocomplete
+      POSTGRES_PASSWORD: autocomplete
+      POSTGRES_DB: autocomplete
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/V1__init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - autocomplete-net
+
+  ###########################################################################
+  # Zookeeper
+  ###########################################################################
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+    networks:
+      - autocomplete-net
+
+  ###########################################################################
+  # Kafka broker
+  ###########################################################################
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - autocomplete-net
+
+  ###########################################################################
+  # Kafka UI
+  ###########################################################################
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    networks:
+      - autocomplete-net
+
+  ###########################################################################
+  # Debezium (CDC)
+  ###########################################################################
+  debezium:
+    image: debezium/connect:2.6
+    depends_on:
+      - kafka
+      - postgres
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: debezium-config
+      OFFSET_STORAGE_TOPIC: debezium-offsets
+      STATUS_STORAGE_TOPIC: debezium-status
+    volumes:
+      - ./infra/debezium/connector-config.json:/kafka/connect/debezium-connector.json
+    networks:
+      - autocomplete-net
+
+  debezium-init:
+    image: curlimages/curl:8.13.0
+    depends_on:
+      - debezium
+      - search-service
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        until curl -fsS http://debezium:8083/connectors > /dev/null; do
+          echo "Waiting for Debezium Connect..."
+          sleep 2
+        done
+
+        if curl -fsS http://debezium:8083/connectors/postgres-connector > /dev/null; then
+          echo "Debezium connector already registered."
+        else
+          curl -fsS -X POST -H "Content-Type: application/json" --data @/connector-config.json http://debezium:8083/connectors
+          echo "Debezium connector registered."
+        fi
+    volumes:
+      - ./infra/debezium/connector-config.json:/connector-config.json:ro
+    networks:
+      - autocomplete-net
+
+  ###########################################################################
+  # autocomplete-service (Query Side)
+  ###########################################################################
+  autocomplete-service:
+    build:
+      context: .
+      dockerfile: autocomplete-service/Dockerfile
+    depends_on:
+      - redis
+    ports:
+      - "8081:8081"
+    networks:
+      - autocomplete-net
+
+  ###########################################################################
+  # search-service (Command Side)
+  ###########################################################################
+  search-service:
+    build:
+      context: .
+      dockerfile: search-service/Dockerfile
+    depends_on:
+      - kafka
+      - postgres
+    ports:
+      - "8082:8082"
+    networks:
+      - autocomplete-net
+
+  ###########################################################################
+  # cdc-service (Debezium consumer → Redis updater)
+  ###########################################################################
+  cdc-service:
+    build:
+      context: .
+      dockerfile: cdc-service/Dockerfile
+    depends_on:
+      - debezium-init
+      - redis
+    ports:
+      - "8084:8084"
+    networks:
+      - autocomplete-net
+
+  ###########################################################################
+  # Angular frontend
+  ###########################################################################
+  frontend:
+    build: ./frontend
+    depends_on:
+      - autocomplete-service
+      - search-service
+    ports:
+      - "4200:80"
+    networks:
+      - autocomplete-net
+
+  ###########################################################################
+  # Angular frontend
+  ###########################################################################
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - kafka
+    entrypoint: ["/bin/bash", "-c", "tr -d '\r' < /kafka-init.sh | /bin/bash"]
+    volumes:
+      - ./infra/kafka/kafka-init.sh:/kafka-init.sh
+    networks:
+      - autocomplete-net
+
+networks:
+  autocomplete-net:
+
+volumes:
+  redis-data:
+  postgres-data:
