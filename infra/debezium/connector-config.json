@@ -1,17 +1,17 @@
 {
-  "name": "postgres-connector",
+  "name": "__DEBEZIUM_CONNECTOR_NAME__",
   "config": {
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-    "database.hostname": "postgres",
-    "database.port": "5432",
-    "database.user": "autocomplete",
-    "database.password": "autocomplete",
-    "database.dbname": "autocomplete",
-    "database.server.name": "pg",
-    "table.include.list": "public.search_stats",
+    "database.hostname": "__DEBEZIUM_DB_HOST__",
+    "database.port": "__DEBEZIUM_DB_PORT__",
+    "database.user": "__POSTGRES_USER__",
+    "database.password": "__POSTGRES_PASSWORD__",
+    "database.dbname": "__POSTGRES_DB__",
+    "database.server.name": "__DEBEZIUM_SERVER_NAME__",
+    "table.include.list": "__DEBEZIUM_TABLE_INCLUDE_LIST__",
     "plugin.name": "pgoutput",
-    "slot.name": "autocomplete_slot",
-    "publication.name": "autocomplete_pub",
-    "topic.prefix": "db-changes"
+    "slot.name": "__DEBEZIUM_SLOT_NAME__",
+    "publication.name": "__DEBEZIUM_PUBLICATION_NAME__",
+    "topic.prefix": "__DEBEZIUM_TOPIC_PREFIX__"
   }
 }

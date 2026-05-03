@@ -1,5 +1,5 @@
 server:
-  port: 8081
+  port: ${SERVER_PORT:8081}
 
 spring:
   application:
@@ -7,8 +7,8 @@ spring:
 
   data:
     redis:
-      host: redis
-      port: 6379
+      host: ${SPRING_DATA_REDIS_HOST:redis}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
       # если без docker, можно localhost
 
 logging:
@@ -17,5 +17,15 @@ logging:
     lt.satsyuk.autocomplete: DEBUG
 
 autocomplete:
-  redis-prefix: "autocomplete:"
+  redis-prefix: "${AUTOCOMPLETE_REDIS_PREFIX:autocomplete:}"
+
+---
+spring:
+  config:
+    activate:
+      on-profile: strict
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:?SPRING_DATA_REDIS_HOST is required in strict profile}
+      port: ${SPRING_DATA_REDIS_PORT:?SPRING_DATA_REDIS_PORT is required in strict profile}
 
