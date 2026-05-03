@@ -5,6 +5,11 @@ on:
     branches: [ main ]
   pull_request:
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
 jobs:
 
   # ─── 1. Shared library ────────────────────────────────────────────────────────
@@ -34,9 +39,9 @@ jobs:
           path: ~/.m2/repository/lt/satsyuk/common
           retention-days: 1
 
-  # ─── 2. Backend services ──────────────────────────────────────────────────────
-  backend:
-    name: Backend – ${{ matrix.service }}
+  # ─── 2. Backend unit tests ────────────────────────────────────────────────────
+  backend-unit:
+    name: Unit – ${{ matrix.service }}
     runs-on: ubuntu-latest
     needs: common
 
@@ -60,10 +65,81 @@ jobs:
           name: common-m2
           path: ~/.m2/repository/lt/satsyuk/common
 
-      - name: Build & test ${{ matrix.service }}
-        run: mvn -B -f ${{ matrix.service }}/pom.xml test
+      - name: Run unit tests
+        run: mvn -B -ntp -f ${{ matrix.service }}/pom.xml test
 
-  # ─── 3. Frontend ──────────────────────────────────────────────────────────────
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports-${{ matrix.service }}
+          path: ${{ matrix.service }}/target/surefire-reports/TEST-*.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Unit test summary
+        if: always()
+        uses: dorny/test-reporter@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: Unit Tests (${{ matrix.service }})
+          path: ${{ matrix.service }}/target/surefire-reports/TEST-*.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
+          use-actions-summary: true
+
+  # ─── 3. Backend integration tests ─────────────────────────────────────────────
+  backend-integration:
+    name: Integration – ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: common
+
+    strategy:
+      matrix:
+        service: [autocomplete-service, search-service, cdc-service]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+
+      - name: Restore common artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: common-m2
+          path: ~/.m2/repository/lt/satsyuk/common
+
+      - name: Run integration tests
+        run: mvn -B -ntp -f ${{ matrix.service }}/pom.xml test-compile failsafe:integration-test failsafe:verify
+
+      - name: Upload integration test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-reports-${{ matrix.service }}
+          path: ${{ matrix.service }}/target/failsafe-reports/TEST-*.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Integration test summary
+        if: always()
+        uses: dorny/test-reporter@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: Integration Tests (${{ matrix.service }})
+          path: ${{ matrix.service }}/target/failsafe-reports/TEST-*.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
+          use-actions-summary: true
+
+  # ─── 4. Frontend ──────────────────────────────────────────────────────────────
   frontend:
     name: Frontend (Angular)
     runs-on: ubuntu-latest
@@ -90,11 +166,77 @@ jobs:
         working-directory: frontend
         run: npm run build --if-present
 
-  # ─── 4. Docker build (no push on PRs) ────────────────────────────────────────
+  # ─── 5. SonarQube ─────────────────────────────────────────────────────────────
+  sonarqube:
+    name: SonarQube – ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: [backend-unit, backend-integration]
+    if: >
+      ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+       (github.event_name == 'pull_request' && github.actor != 'dependabot[bot]')) &&
+      secrets.SONAR_TOKEN != ''
+
+    strategy:
+      matrix:
+        service: [autocomplete-service, search-service, cdc-service]
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+
+      - name: Restore common artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: common-m2
+          path: ~/.m2/repository/lt/satsyuk/common
+
+      - name: Cache SonarQube packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: SonarQube analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          SERVICE: ${{ matrix.service }}
+        shell: bash
+        run: |
+          host_url="${SONAR_HOST_URL:-https://sonarcloud.io}"
+          project_key="${REPO_NAME}-${SERVICE}"
+
+          cmd=(
+            mvn -B -ntp
+            -f "${SERVICE}/pom.xml"
+            -DskipTests
+            sonar:sonar
+            "-Dsonar.host.url=${host_url}"
+            "-Dsonar.projectKey=${project_key}"
+          )
+
+          if [ -n "${SONAR_ORGANIZATION}" ]; then
+            cmd+=("-Dsonar.organization=${SONAR_ORGANIZATION}")
+          fi
+
+          "${cmd[@]}"
+
+  # ─── 6. Docker build (no push on PRs) ────────────────────────────────────────
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
-    needs: [backend, frontend]
+    needs: [backend-unit, backend-integration, frontend]
 
     steps:
       - uses: actions/checkout@v6

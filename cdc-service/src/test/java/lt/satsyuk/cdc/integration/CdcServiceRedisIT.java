@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
-class CdcServiceRedisIntegrationTest {
+class CdcServiceRedisIT {
 
     @Container
     static final KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
