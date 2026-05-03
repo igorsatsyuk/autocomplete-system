@@ -134,7 +134,7 @@ Expected: array contains `java` and/or `javascript` ordered by Redis ZSET score.
 3) Verify PostgreSQL aggregate:
 
 ```powershell
-docker compose exec postgres psql -U autocomplete -d autocomplete -c "SELECT query, frequency FROM search_stats WHERE query IN ('java','javascript') ORDER BY frequency DESC;"
+docker compose exec postgres /bin/sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT query, frequency FROM search_stats WHERE query IN ($$java$$,$$javascript$$) ORDER BY frequency DESC;"'
 ```
 
 4) Verify Debezium connector:
@@ -201,7 +201,7 @@ Note: default app configs use Docker hostnames (`kafka`, `postgres`, `redis`), s
 
 - Critical infra/runtime values are parameterized via `.env` in `docker-compose.yml` (DB credentials, connector settings, exposed ports).
 - Published service ports are bound to `127.0.0.1` by default to reduce accidental exposure outside the host.
-- In Compose, `search-service` datasource defaults are derived from `POSTGRES_*` (with optional `SPRING_DATASOURCE_*` overrides).
+- In Compose, `search-service` datasource is derived from `POSTGRES_*`; use `SPRING_DATASOURCE_*` when running `search-service` outside Compose.
 - Java services run with `SPRING_PROFILES_ACTIVE=strict` by default in Compose.
 - Keep `frontend/proxy.conf.json` and `frontend/nginx.conf` aligned when API routes change.
 - Schema changes should be mirrored in both:
