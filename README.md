@@ -119,7 +119,7 @@ curl "http://localhost:4200/api/complete?q=ja&limit=10"
 
 ```powershell
 curl "http://localhost:8082/api/search?q=java"
-curl "http://localhost:8082/api/search?q=java"
+curl "http://localhost:8082/api/search?q=kotlin"
 curl "http://localhost:8082/api/search?q=javascript"
 ```
 
