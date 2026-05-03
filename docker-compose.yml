@@ -130,6 +130,27 @@ services:
           printf '%s' "$$1" | sed -e 's/[\\&|]/\\\\&/g'
         }
 
+        validate_env_value() {
+          value="$$1"
+          name="$$2"
+          if printf '%s' "$$value" | grep -q '["\r\n]'; then
+            echo "Invalid $$name: value contains unsupported characters for JSON template (quote/newline)." >&2
+            exit 1
+          fi
+        }
+
+        validate_env_value "$$DEBEZIUM_CONNECTOR_NAME" "DEBEZIUM_CONNECTOR_NAME"
+        validate_env_value "$$DEBEZIUM_DB_HOST" "DEBEZIUM_DB_HOST"
+        validate_env_value "$$DEBEZIUM_DB_PORT" "DEBEZIUM_DB_PORT"
+        validate_env_value "$$POSTGRES_USER" "POSTGRES_USER"
+        validate_env_value "$$POSTGRES_PASSWORD" "POSTGRES_PASSWORD"
+        validate_env_value "$$POSTGRES_DB" "POSTGRES_DB"
+        validate_env_value "$$DEBEZIUM_SERVER_NAME" "DEBEZIUM_SERVER_NAME"
+        validate_env_value "$$DEBEZIUM_TABLE_INCLUDE_LIST" "DEBEZIUM_TABLE_INCLUDE_LIST"
+        validate_env_value "$$DEBEZIUM_SLOT_NAME" "DEBEZIUM_SLOT_NAME"
+        validate_env_value "$$DEBEZIUM_PUBLICATION_NAME" "DEBEZIUM_PUBLICATION_NAME"
+        validate_env_value "$$DEBEZIUM_TOPIC_PREFIX" "DEBEZIUM_TOPIC_PREFIX"
+
         ESC_DEBEZIUM_CONNECTOR_NAME="$$(escape_sed "$$DEBEZIUM_CONNECTOR_NAME")"
         ESC_DEBEZIUM_DB_HOST="$$(escape_sed "$$DEBEZIUM_DB_HOST")"
         ESC_DEBEZIUM_DB_PORT="$$(escape_sed "$$DEBEZIUM_DB_PORT")"
@@ -203,9 +224,9 @@ services:
       - postgres
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-strict}
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?SPRING_DATASOURCE_URL is required}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?SPRING_DATASOURCE_USERNAME is required}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-${POSTGRES_USER:?POSTGRES_USER is required}}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:?SPRING_KAFKA_BOOTSTRAP_SERVERS is required}
       SPRING_KAFKA_STREAMS_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_STREAMS_BOOTSTRAP_SERVERS:-kafka:9092}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${SEARCH_MANAGEMENT_ENDPOINTS_EXPOSURE:-health,info}
@@ -247,12 +268,12 @@ services:
       - autocomplete-service
       - search-service
     ports:
-      - "${FRONTEND_PORT:-4200}:80"
+      - "127.0.0.1:${FRONTEND_PORT:-4200}:80"
     networks:
       - autocomplete-net
 
   ###########################################################################
-  # Angular frontend
+  # Kafka topics bootstrap
   ###########################################################################
   kafka-init:
     image: ${KAFKA_IMAGE:-confluentinc/cp-kafka:7.5.0}

@@ -7,8 +7,8 @@ spring:
 
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/autocomplete}
-    username: ${SPRING_DATASOURCE_USERNAME:autocomplete}
-    password: ${SPRING_DATASOURCE_PASSWORD:autocomplete}
+    username: ${SPRING_DATASOURCE_USERNAME:?SPRING_DATASOURCE_USERNAME is required}
+    password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -43,7 +43,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:${SEARCH_MANAGEMENT_ENDPOINTS_EXPOSURE:*}}
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:${SEARCH_MANAGEMENT_ENDPOINTS_EXPOSURE:health,info}}
 
 search:
   topics:
