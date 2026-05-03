@@ -41,6 +41,7 @@ class CdcServiceRedisIntegrationTest {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         registry.add("spring.kafka.consumer.group-id", () -> "cdc-it-group");
         registry.add("spring.kafka.consumer.auto-offset-reset", () -> "earliest");
+        registry.add("spring.kafka.consumer.properties.metadata.max.age.ms", () -> "1000");
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("cdc.topic-pattern", () -> KafkaTopics.DB_CHANGES_SEARCH_STATS_PATTERN);

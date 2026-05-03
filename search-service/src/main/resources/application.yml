@@ -1,14 +1,14 @@
 server:
-  port: 8082
+  port: ${SERVER_PORT:8082}
 
 spring:
   application:
     name: search-service
 
   datasource:
-    url: jdbc:postgresql://postgres:5432/autocomplete
-    username: autocomplete
-    password: autocomplete
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/autocomplete}
+    username: ${SPRING_DATASOURCE_USERNAME:?SPRING_DATASOURCE_USERNAME is required}
+    password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -22,16 +22,16 @@ spring:
     locations: classpath:db/migration
 
   kafka:
-    bootstrap-servers: kafka:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
 
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
     streams:
-      application-id: search-stats-streams
-      bootstrap-servers: kafka:9092
-      state-dir: /tmp/kafka-streams
+      application-id: ${SPRING_KAFKA_STREAMS_APPLICATION_ID:search-stats-streams}
+      bootstrap-servers: ${SPRING_KAFKA_STREAMS_BOOTSTRAP_SERVERS:${SPRING_KAFKA_BOOTSTRAP_SERVERS:kafka:9092}}
+      state-dir: ${SPRING_KAFKA_STREAMS_STATE_DIR:/tmp/kafka-streams}
 
 logging:
   level:
@@ -43,12 +43,32 @@ management:
   endpoints:
     web:
       exposure:
-        include: "*"
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:${SEARCH_MANAGEMENT_ENDPOINTS_EXPOSURE:health,info}}
 
 search:
   topics:
-    events: search-events
-    stats: search-stats
+    events: ${SEARCH_TOPIC_EVENTS:search-events}
+    stats: ${SEARCH_TOPIC_STATS:search-stats}
   streams:
-    application-id: search-stats-app
-    state-store: search-counts
+    application-id: ${SEARCH_STREAMS_APPLICATION_ID:search-stats-app}
+    state-store: ${SEARCH_STREAMS_STATE_STORE:search-counts}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: strict
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:?SPRING_DATASOURCE_URL is required in strict profile}
+    username: ${SPRING_DATASOURCE_USERNAME:?SPRING_DATASOURCE_USERNAME is required in strict profile}
+    password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required in strict profile}
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:?SPRING_KAFKA_BOOTSTRAP_SERVERS is required in strict profile}
+    streams:
+      bootstrap-servers: ${SPRING_KAFKA_STREAMS_BOOTSTRAP_SERVERS:${SPRING_KAFKA_BOOTSTRAP_SERVERS:?SPRING_KAFKA_BOOTSTRAP_SERVERS is required in strict profile}}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:${SEARCH_MANAGEMENT_ENDPOINTS_EXPOSURE:health,info}}

@@ -6,10 +6,10 @@ services:
   # Redis Stack (Redis + RediSearch)
   ###########################################################################
   redis:
-    image: redis/redis-stack:latest
+    image: ${REDIS_IMAGE:-redis/redis-stack:latest}
     ports:
-      - "6379:6379"
-      - "8001:8001"   # RedisInsight UI
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_INSIGHT_PORT:-8001}:8001"   # RedisInsight UI
     volumes:
       - redis-data:/data
     networks:
@@ -19,21 +19,21 @@ services:
   # PostgreSQL (write store)
   ###########################################################################
   postgres:
-    image: postgres:16
+    image: ${POSTGRES_IMAGE:-postgres:16}
     command:
       - postgres
       - -c
       - wal_level=logical
       - -c
-      - max_replication_slots=4
+      - max_replication_slots=${POSTGRES_MAX_REPLICATION_SLOTS:-4}
       - -c
-      - max_wal_senders=4
+      - max_wal_senders=${POSTGRES_MAX_WAL_SENDERS:-4}
     environment:
-      POSTGRES_USER: autocomplete
-      POSTGRES_PASSWORD: autocomplete
-      POSTGRES_DB: autocomplete
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./infra/postgres/V1__init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -44,11 +44,11 @@ services:
   # Zookeeper
   ###########################################################################
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
+    image: ${ZOOKEEPER_IMAGE:-confluentinc/cp-zookeeper:7.5.0}
     environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_CLIENT_PORT:-2181}
     ports:
-      - "2181:2181"
+      - "127.0.0.1:${ZOOKEEPER_PORT:-2181}:2181"
     networks:
       - autocomplete-net
 
@@ -56,17 +56,17 @@ services:
   # Kafka broker
   ###########################################################################
   kafka:
-    image: confluentinc/cp-kafka:7.5.0
+    image: ${KAFKA_IMAGE:-confluentinc/cp-kafka:7.5.0}
     depends_on:
       - zookeeper
     ports:
-      - "9092:9092"
+      - "127.0.0.1:${KAFKA_PORT:-9092}:9092"
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_BROKER_ID: ${KAFKA_BROKER_ID:-1}
+      KAFKA_ZOOKEEPER_CONNECT: ${KAFKA_ZOOKEEPER_CONNECT:-zookeeper:2181}
+      KAFKA_ADVERTISED_LISTENERS: ${KAFKA_ADVERTISED_LISTENERS:-PLAINTEXT://kafka:9092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: ${KAFKA_LISTENER_SECURITY_PROTOCOL_MAP:-PLAINTEXT:PLAINTEXT}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: ${KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR:-1}
     networks:
       - autocomplete-net
 
@@ -74,12 +74,12 @@ services:
   # Kafka UI
   ###########################################################################
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    image: ${KAFKA_UI_IMAGE:-provectuslabs/kafka-ui:latest}
     ports:
-      - "8080:8080"
+      - "127.0.0.1:${KAFKA_UI_PORT:-8080}:8080"
     environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_NAME: ${KAFKA_CLUSTER_NAME:-local}
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
     networks:
       - autocomplete-net
 
@@ -87,41 +87,113 @@ services:
   # Debezium (CDC)
   ###########################################################################
   debezium:
-    image: debezium/connect:2.6
+    image: ${DEBEZIUM_IMAGE:-debezium/connect:2.6}
     depends_on:
       - kafka
       - postgres
     ports:
-      - "8083:8083"
+      - "127.0.0.1:${DEBEZIUM_PORT:-8083}:8083"
     environment:
-      BOOTSTRAP_SERVERS: kafka:9092
-      GROUP_ID: 1
-      CONFIG_STORAGE_TOPIC: debezium-config
-      OFFSET_STORAGE_TOPIC: debezium-offsets
-      STATUS_STORAGE_TOPIC: debezium-status
+      BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      GROUP_ID: ${DEBEZIUM_GROUP_ID:-1}
+      CONFIG_STORAGE_TOPIC: ${DEBEZIUM_CONFIG_TOPIC:-debezium-config}
+      OFFSET_STORAGE_TOPIC: ${DEBEZIUM_OFFSET_TOPIC:-debezium-offsets}
+      STATUS_STORAGE_TOPIC: ${DEBEZIUM_STATUS_TOPIC:-debezium-status}
     volumes:
       - ./infra/debezium/connector-config.json:/kafka/connect/debezium-connector.json
     networks:
       - autocomplete-net
 
   debezium-init:
-    image: curlimages/curl:8.13.0
+    image: ${CURL_IMAGE:-curlimages/curl:8.13.0}
     depends_on:
       - debezium
       - search-service
+    environment:
+      DEBEZIUM_CONNECTOR_NAME: ${DEBEZIUM_CONNECTOR_NAME:-postgres-connector}
+      DEBEZIUM_CONNECT_URL: ${DEBEZIUM_CONNECT_URL:-http://debezium:8083/connectors}
+      DEBEZIUM_DB_HOST: ${DEBEZIUM_DB_HOST:-postgres}
+      DEBEZIUM_DB_PORT: ${DEBEZIUM_DB_PORT:-5432}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      DEBEZIUM_SERVER_NAME: ${DEBEZIUM_SERVER_NAME:-pg}
+      DEBEZIUM_TABLE_INCLUDE_LIST: ${DEBEZIUM_TABLE_INCLUDE_LIST:-public.search_stats}
+      DEBEZIUM_SLOT_NAME: ${DEBEZIUM_SLOT_NAME:-autocomplete_slot}
+      DEBEZIUM_PUBLICATION_NAME: ${DEBEZIUM_PUBLICATION_NAME:-autocomplete_pub}
+      DEBEZIUM_TOPIC_PREFIX: ${DEBEZIUM_TOPIC_PREFIX:-db-changes}
     entrypoint:
       - /bin/sh
       - -ec
       - |
-        until curl -fsS http://debezium:8083/connectors > /dev/null; do
+        escape_sed() {
+          printf '%s' "$$1" \
+            | sed -e 's/\\/\\\\/g' \
+                  -e 's/&/\\\&/g' \
+                  -e 's/|/\\|/g'
+        }
+
+        validate_env_value() {
+          value="$$1"
+          name="$$2"
+          quote='"'
+          cr="$$(printf '\r')"
+          lf="$$(printf '\n')"
+          case "$$value" in
+            *"$$quote"*|*"$$cr"*|*"$$lf"*)
+              echo "Invalid $$name: value contains unsupported characters for JSON template (quote/newline)." >&2
+              exit 1
+              ;;
+          esac
+        }
+
+        validate_env_value "$$DEBEZIUM_CONNECTOR_NAME" "DEBEZIUM_CONNECTOR_NAME"
+        validate_env_value "$$DEBEZIUM_DB_HOST" "DEBEZIUM_DB_HOST"
+        validate_env_value "$$DEBEZIUM_DB_PORT" "DEBEZIUM_DB_PORT"
+        validate_env_value "$$POSTGRES_USER" "POSTGRES_USER"
+        validate_env_value "$$POSTGRES_PASSWORD" "POSTGRES_PASSWORD"
+        validate_env_value "$$POSTGRES_DB" "POSTGRES_DB"
+        validate_env_value "$$DEBEZIUM_SERVER_NAME" "DEBEZIUM_SERVER_NAME"
+        validate_env_value "$$DEBEZIUM_TABLE_INCLUDE_LIST" "DEBEZIUM_TABLE_INCLUDE_LIST"
+        validate_env_value "$$DEBEZIUM_SLOT_NAME" "DEBEZIUM_SLOT_NAME"
+        validate_env_value "$$DEBEZIUM_PUBLICATION_NAME" "DEBEZIUM_PUBLICATION_NAME"
+        validate_env_value "$$DEBEZIUM_TOPIC_PREFIX" "DEBEZIUM_TOPIC_PREFIX"
+
+        ESC_DEBEZIUM_CONNECTOR_NAME="$$(escape_sed "$$DEBEZIUM_CONNECTOR_NAME")"
+        ESC_DEBEZIUM_DB_HOST="$$(escape_sed "$$DEBEZIUM_DB_HOST")"
+        ESC_DEBEZIUM_DB_PORT="$$(escape_sed "$$DEBEZIUM_DB_PORT")"
+        ESC_POSTGRES_USER="$$(escape_sed "$$POSTGRES_USER")"
+        ESC_POSTGRES_PASSWORD="$$(escape_sed "$$POSTGRES_PASSWORD")"
+        ESC_POSTGRES_DB="$$(escape_sed "$$POSTGRES_DB")"
+        ESC_DEBEZIUM_SERVER_NAME="$$(escape_sed "$$DEBEZIUM_SERVER_NAME")"
+        ESC_DEBEZIUM_TABLE_INCLUDE_LIST="$$(escape_sed "$$DEBEZIUM_TABLE_INCLUDE_LIST")"
+        ESC_DEBEZIUM_SLOT_NAME="$$(escape_sed "$$DEBEZIUM_SLOT_NAME")"
+        ESC_DEBEZIUM_PUBLICATION_NAME="$$(escape_sed "$$DEBEZIUM_PUBLICATION_NAME")"
+        ESC_DEBEZIUM_TOPIC_PREFIX="$$(escape_sed "$$DEBEZIUM_TOPIC_PREFIX")"
+
+        sed \
+          -e "s|__DEBEZIUM_CONNECTOR_NAME__|$$ESC_DEBEZIUM_CONNECTOR_NAME|g" \
+          -e "s|__DEBEZIUM_DB_HOST__|$$ESC_DEBEZIUM_DB_HOST|g" \
+          -e "s|__DEBEZIUM_DB_PORT__|$$ESC_DEBEZIUM_DB_PORT|g" \
+          -e "s|__POSTGRES_USER__|$$ESC_POSTGRES_USER|g" \
+          -e "s|__POSTGRES_PASSWORD__|$$ESC_POSTGRES_PASSWORD|g" \
+          -e "s|__POSTGRES_DB__|$$ESC_POSTGRES_DB|g" \
+          -e "s|__DEBEZIUM_SERVER_NAME__|$$ESC_DEBEZIUM_SERVER_NAME|g" \
+          -e "s|__DEBEZIUM_TABLE_INCLUDE_LIST__|$$ESC_DEBEZIUM_TABLE_INCLUDE_LIST|g" \
+          -e "s|__DEBEZIUM_SLOT_NAME__|$$ESC_DEBEZIUM_SLOT_NAME|g" \
+          -e "s|__DEBEZIUM_PUBLICATION_NAME__|$$ESC_DEBEZIUM_PUBLICATION_NAME|g" \
+          -e "s|__DEBEZIUM_TOPIC_PREFIX__|$$ESC_DEBEZIUM_TOPIC_PREFIX|g" \
+          /connector-config.json > /tmp/connector-config.json
+
+        until curl -fsS "$$DEBEZIUM_CONNECT_URL" > /dev/null; do
           echo "Waiting for Debezium Connect..."
           sleep 2
         done
 
-        if curl -fsS http://debezium:8083/connectors/postgres-connector > /dev/null; then
+        if curl -fsS "$$DEBEZIUM_CONNECT_URL/$$DEBEZIUM_CONNECTOR_NAME" > /dev/null; then
           echo "Debezium connector already registered."
         else
-          curl -fsS -X POST -H "Content-Type: application/json" --data @/connector-config.json http://debezium:8083/connectors
+          curl -fsS -X POST -H "Content-Type: application/json" --data @/tmp/connector-config.json "$$DEBEZIUM_CONNECT_URL"
           echo "Debezium connector registered."
         fi
     volumes:
@@ -138,8 +210,13 @@ services:
       dockerfile: autocomplete-service/Dockerfile
     depends_on:
       - redis
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-strict}
+      SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST:?SPRING_DATA_REDIS_HOST is required}
+      SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT:?SPRING_DATA_REDIS_PORT is required}
+      AUTOCOMPLETE_REDIS_PREFIX: ${AUTOCOMPLETE_REDIS_PREFIX:-autocomplete:}
     ports:
-      - "8081:8081"
+      - "127.0.0.1:${AUTOCOMPLETE_SERVICE_PORT:-8081}:8081"
     networks:
       - autocomplete-net
 
@@ -153,8 +230,17 @@ services:
     depends_on:
       - kafka
       - postgres
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-strict}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:?POSTGRES_USER is required}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:?SPRING_KAFKA_BOOTSTRAP_SERVERS is required}
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${SEARCH_MANAGEMENT_ENDPOINTS_EXPOSURE:-health,info}
+      SEARCH_TOPIC_EVENTS: ${SEARCH_TOPIC_EVENTS:-search-events}
+      SEARCH_TOPIC_STATS: ${SEARCH_TOPIC_STATS:-search-stats}
     ports:
-      - "8082:8082"
+      - "127.0.0.1:${SEARCH_SERVICE_PORT:-8082}:8082"
     networks:
       - autocomplete-net
 
@@ -168,8 +254,15 @@ services:
     depends_on:
       - debezium-init
       - redis
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-strict}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:?SPRING_KAFKA_BOOTSTRAP_SERVERS is required}
+      SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST:?SPRING_DATA_REDIS_HOST is required}
+      SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT:?SPRING_DATA_REDIS_PORT is required}
+      CDC_TOPIC_PATTERN: ${CDC_TOPIC_PATTERN:-db-changes\.public\.search_stats}
+      AUTOCOMPLETE_REDIS_PREFIX: ${AUTOCOMPLETE_REDIS_PREFIX:-autocomplete:}
     ports:
-      - "8084:8084"
+      - "127.0.0.1:${CDC_SERVICE_PORT:-8084}:8084"
     networks:
       - autocomplete-net
 
@@ -182,15 +275,15 @@ services:
       - autocomplete-service
       - search-service
     ports:
-      - "4200:80"
+      - "127.0.0.1:${FRONTEND_PORT:-4200}:80"
     networks:
       - autocomplete-net
 
   ###########################################################################
-  # Angular frontend
+  # Kafka topics bootstrap
   ###########################################################################
   kafka-init:
-    image: confluentinc/cp-kafka:7.5.0
+    image: ${KAFKA_IMAGE:-confluentinc/cp-kafka:7.5.0}
     depends_on:
       - kafka
     entrypoint: ["/bin/bash", "-c", "tr -d '\r' < /kafka-init.sh | /bin/bash"]
