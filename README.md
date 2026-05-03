@@ -80,7 +80,7 @@ Create local env file from template and update secrets:
 Copy-Item .env.example .env
 ```
 
-`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` and strict Spring connectivity vars are mandatory in `.env`; compose startup fails if any required value is missing.
+`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` and strict connectivity vars (`SPRING_KAFKA_BOOTSTRAP_SERVERS`, `SPRING_DATA_REDIS_*`) are mandatory in `.env`; compose startup fails if any required value is missing.
 
 Start full stack:
 
@@ -200,7 +200,8 @@ Note: default app configs use Docker hostnames (`kafka`, `postgres`, `redis`), s
 ## Configuration Notes
 
 - Critical infra/runtime values are parameterized via `.env` in `docker-compose.yml` (DB credentials, connector settings, exposed ports).
-- Infra ports are bound to `127.0.0.1` by default to reduce accidental exposure outside the host.
+- Published service ports are bound to `127.0.0.1` by default to reduce accidental exposure outside the host.
+- In Compose, `search-service` datasource defaults are derived from `POSTGRES_*` (with optional `SPRING_DATASOURCE_*` overrides).
 - Java services run with `SPRING_PROFILES_ACTIVE=strict` by default in Compose.
 - Keep `frontend/proxy.conf.json` and `frontend/nginx.conf` aligned when API routes change.
 - Schema changes should be mirrored in both:
@@ -218,7 +219,7 @@ Note: default app configs use Docker hostnames (`kafka`, `postgres`, `redis`), s
 ## Strict Mode
 
 - Compose enables strict mode for `search-service`, `cdc-service`, and `autocomplete-service` by default.
-- In strict mode, app startup fails fast if required variables are missing (`SPRING_DATASOURCE_*`, `SPRING_KAFKA_*`, `SPRING_DATA_REDIS_*`).
+- In strict mode, app startup fails fast if required variables are missing (`SPRING_DATASOURCE_*` for non-Compose runs, `SPRING_KAFKA_*`, `SPRING_DATA_REDIS_*`).
 - Management endpoint exposure for `search-service` is reduced to `health,info` by default via `SEARCH_MANAGEMENT_ENDPOINTS_EXPOSURE`.
 - To run without strict profile for local debugging only, set `SPRING_PROFILES_ACTIVE=default` in `.env`.
 
