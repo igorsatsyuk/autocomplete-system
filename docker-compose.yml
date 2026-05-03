@@ -126,29 +126,45 @@ services:
       - /bin/sh
       - -ec
       - |
+        escape_sed() {
+          printf '%s' "$$1" | sed -e 's/[\\&|]/\\\\&/g'
+        }
+
+        ESC_DEBEZIUM_CONNECTOR_NAME="$$(escape_sed "$$DEBEZIUM_CONNECTOR_NAME")"
+        ESC_DEBEZIUM_DB_HOST="$$(escape_sed "$$DEBEZIUM_DB_HOST")"
+        ESC_DEBEZIUM_DB_PORT="$$(escape_sed "$$DEBEZIUM_DB_PORT")"
+        ESC_POSTGRES_USER="$$(escape_sed "$$POSTGRES_USER")"
+        ESC_POSTGRES_PASSWORD="$$(escape_sed "$$POSTGRES_PASSWORD")"
+        ESC_POSTGRES_DB="$$(escape_sed "$$POSTGRES_DB")"
+        ESC_DEBEZIUM_SERVER_NAME="$$(escape_sed "$$DEBEZIUM_SERVER_NAME")"
+        ESC_DEBEZIUM_TABLE_INCLUDE_LIST="$$(escape_sed "$$DEBEZIUM_TABLE_INCLUDE_LIST")"
+        ESC_DEBEZIUM_SLOT_NAME="$$(escape_sed "$$DEBEZIUM_SLOT_NAME")"
+        ESC_DEBEZIUM_PUBLICATION_NAME="$$(escape_sed "$$DEBEZIUM_PUBLICATION_NAME")"
+        ESC_DEBEZIUM_TOPIC_PREFIX="$$(escape_sed "$$DEBEZIUM_TOPIC_PREFIX")"
+
         sed \
-          -e "s|__DEBEZIUM_CONNECTOR_NAME__|$DEBEZIUM_CONNECTOR_NAME|g" \
-          -e "s|__DEBEZIUM_DB_HOST__|$DEBEZIUM_DB_HOST|g" \
-          -e "s|__DEBEZIUM_DB_PORT__|$DEBEZIUM_DB_PORT|g" \
-          -e "s|__POSTGRES_USER__|$POSTGRES_USER|g" \
-          -e "s|__POSTGRES_PASSWORD__|$POSTGRES_PASSWORD|g" \
-          -e "s|__POSTGRES_DB__|$POSTGRES_DB|g" \
-          -e "s|__DEBEZIUM_SERVER_NAME__|$DEBEZIUM_SERVER_NAME|g" \
-          -e "s|__DEBEZIUM_TABLE_INCLUDE_LIST__|$DEBEZIUM_TABLE_INCLUDE_LIST|g" \
-          -e "s|__DEBEZIUM_SLOT_NAME__|$DEBEZIUM_SLOT_NAME|g" \
-          -e "s|__DEBEZIUM_PUBLICATION_NAME__|$DEBEZIUM_PUBLICATION_NAME|g" \
-          -e "s|__DEBEZIUM_TOPIC_PREFIX__|$DEBEZIUM_TOPIC_PREFIX|g" \
+          -e "s|__DEBEZIUM_CONNECTOR_NAME__|$$ESC_DEBEZIUM_CONNECTOR_NAME|g" \
+          -e "s|__DEBEZIUM_DB_HOST__|$$ESC_DEBEZIUM_DB_HOST|g" \
+          -e "s|__DEBEZIUM_DB_PORT__|$$ESC_DEBEZIUM_DB_PORT|g" \
+          -e "s|__POSTGRES_USER__|$$ESC_POSTGRES_USER|g" \
+          -e "s|__POSTGRES_PASSWORD__|$$ESC_POSTGRES_PASSWORD|g" \
+          -e "s|__POSTGRES_DB__|$$ESC_POSTGRES_DB|g" \
+          -e "s|__DEBEZIUM_SERVER_NAME__|$$ESC_DEBEZIUM_SERVER_NAME|g" \
+          -e "s|__DEBEZIUM_TABLE_INCLUDE_LIST__|$$ESC_DEBEZIUM_TABLE_INCLUDE_LIST|g" \
+          -e "s|__DEBEZIUM_SLOT_NAME__|$$ESC_DEBEZIUM_SLOT_NAME|g" \
+          -e "s|__DEBEZIUM_PUBLICATION_NAME__|$$ESC_DEBEZIUM_PUBLICATION_NAME|g" \
+          -e "s|__DEBEZIUM_TOPIC_PREFIX__|$$ESC_DEBEZIUM_TOPIC_PREFIX|g" \
           /connector-config.json > /tmp/connector-config.json
 
-        until curl -fsS "$DEBEZIUM_CONNECT_URL" > /dev/null; do
+        until curl -fsS "$$DEBEZIUM_CONNECT_URL" > /dev/null; do
           echo "Waiting for Debezium Connect..."
           sleep 2
         done
 
-        if curl -fsS "$DEBEZIUM_CONNECT_URL/$DEBEZIUM_CONNECTOR_NAME" > /dev/null; then
+        if curl -fsS "$$DEBEZIUM_CONNECT_URL/$$DEBEZIUM_CONNECTOR_NAME" > /dev/null; then
           echo "Debezium connector already registered."
         else
-          curl -fsS -X POST -H "Content-Type: application/json" --data @/tmp/connector-config.json "$DEBEZIUM_CONNECT_URL"
+          curl -fsS -X POST -H "Content-Type: application/json" --data @/tmp/connector-config.json "$$DEBEZIUM_CONNECT_URL"
           echo "Debezium connector registered."
         fi
     volumes:
@@ -171,7 +187,7 @@ services:
       SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT:?SPRING_DATA_REDIS_PORT is required}
       AUTOCOMPLETE_REDIS_PREFIX: ${AUTOCOMPLETE_REDIS_PREFIX:-autocomplete:}
     ports:
-      - "${AUTOCOMPLETE_SERVICE_PORT:-8081}:8081"
+      - "127.0.0.1:${AUTOCOMPLETE_SERVICE_PORT:-8081}:8081"
     networks:
       - autocomplete-net
 
@@ -191,12 +207,12 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?SPRING_DATASOURCE_USERNAME is required}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:?SPRING_KAFKA_BOOTSTRAP_SERVERS is required}
-      SPRING_KAFKA_STREAMS_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_STREAMS_BOOTSTRAP_SERVERS:?SPRING_KAFKA_STREAMS_BOOTSTRAP_SERVERS is required}
+      SPRING_KAFKA_STREAMS_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_STREAMS_BOOTSTRAP_SERVERS:-kafka:9092}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${SEARCH_MANAGEMENT_ENDPOINTS_EXPOSURE:-health,info}
       SEARCH_TOPIC_EVENTS: ${SEARCH_TOPIC_EVENTS:-search-events}
       SEARCH_TOPIC_STATS: ${SEARCH_TOPIC_STATS:-search-stats}
     ports:
-      - "${SEARCH_SERVICE_PORT:-8082}:8082"
+      - "127.0.0.1:${SEARCH_SERVICE_PORT:-8082}:8082"
     networks:
       - autocomplete-net
 
@@ -218,7 +234,7 @@ services:
       CDC_TOPIC_PATTERN: ${CDC_TOPIC_PATTERN:-db-changes\.public\.search_stats}
       AUTOCOMPLETE_REDIS_PREFIX: ${AUTOCOMPLETE_REDIS_PREFIX:-autocomplete:}
     ports:
-      - "${CDC_SERVICE_PORT:-8084}:8084"
+      - "127.0.0.1:${CDC_SERVICE_PORT:-8084}:8084"
     networks:
       - autocomplete-net
 

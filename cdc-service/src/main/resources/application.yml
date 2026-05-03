@@ -24,7 +24,7 @@ logging:
     lt.satsyuk.cdc: DEBUG
 
 cdc:
-  topic-pattern: "${CDC_TOPIC_PATTERN:db-changes\.public\.search_stats}"
+  topic-pattern: '${CDC_TOPIC_PATTERN:db-changes\.public\.search_stats}'
 
 autocomplete:
   redis-prefix: "${AUTOCOMPLETE_REDIS_PREFIX:autocomplete:}"
