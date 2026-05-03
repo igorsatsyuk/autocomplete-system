@@ -227,6 +227,7 @@ jobs:
             mvn -B -ntp
             -f "${SERVICE}/pom.xml"
             -DskipTests
+            test-compile
             sonar:sonar
             "-Dsonar.host.url=${host_url}"
             "-Dsonar.projectKey=${project_key}"
