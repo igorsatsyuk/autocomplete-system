@@ -133,10 +133,15 @@ services:
         validate_env_value() {
           value="$$1"
           name="$$2"
-          if printf '%s' "$$value" | grep -q '["\r\n]'; then
-            echo "Invalid $$name: value contains unsupported characters for JSON template (quote/newline)." >&2
-            exit 1
-          fi
+          quote='"'
+          cr="$$(printf '\r')"
+          lf="$$(printf '\n')"
+          case "$$value" in
+            *"$$quote"*|*"$$cr"*|*"$$lf"*)
+              echo "Invalid $$name: value contains unsupported characters for JSON template (quote/newline)." >&2
+              exit 1
+              ;;
+          esac
         }
 
         validate_env_value "$$DEBEZIUM_CONNECTOR_NAME" "DEBEZIUM_CONNECTOR_NAME"
