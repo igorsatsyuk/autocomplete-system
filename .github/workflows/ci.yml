@@ -61,7 +61,7 @@ jobs:
           cache: maven
 
       - name: Restore common artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: common-m2
           path: ~/.m2/repository/lt/satsyuk/common
@@ -71,7 +71,7 @@ jobs:
 
       - name: Upload unit test reports
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: unit-test-reports-${{ matrix.service }}
           path: ${{ matrix.service }}/target/surefire-reports/TEST-*.xml
@@ -124,7 +124,7 @@ jobs:
 
       - name: Upload integration test reports
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: integration-test-reports-${{ matrix.service }}
           path: ${{ matrix.service }}/target/failsafe-reports/TEST-*.xml
@@ -198,7 +198,7 @@ jobs:
           cache: maven
 
       - name: Restore common artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: common-m2
           path: ~/.m2/repository/lt/satsyuk/common
