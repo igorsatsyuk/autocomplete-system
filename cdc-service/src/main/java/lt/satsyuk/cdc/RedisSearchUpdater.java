@@ -46,8 +46,11 @@ public class RedisSearchUpdater {
                             .then();
                 })
                 .then()
-                .doOnError(ex -> log.error("Failed to update Redis index", ex))
-                .doOnSuccess(ignored -> log.debug("Redis index updated for '{}'", normalized))
-                .subscribe();
+                .subscribe(
+                        ignored -> {
+                        },
+                        ex -> log.error("Failed to update Redis index", ex),
+                        () -> log.debug("Redis index updated for '{}'", normalized)
+                );
     }
 }

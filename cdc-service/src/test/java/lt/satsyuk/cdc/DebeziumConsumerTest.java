@@ -65,5 +65,23 @@ class DebeziumConsumerTest {
 
         verify(updater, never()).updateQueryScore(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong());
     }
+
+    @Test
+    void ignoresNullKafkaMessage() {
+        DebeziumConsumer consumer = new DebeziumConsumer(updater, new ObjectMapper());
+
+        consumer.handleDbChange(null);
+
+        verify(updater, never()).updateQueryScore(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void ignoresBlankKafkaMessage() {
+        DebeziumConsumer consumer = new DebeziumConsumer(updater, new ObjectMapper());
+
+        consumer.handleDbChange("   ");
+
+        verify(updater, never()).updateQueryScore(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong());
+    }
 }
 
