@@ -293,6 +293,10 @@ jobs:
           echo "Final coverage structure:"
           find coverage/$SERVICE -name "*.xml" | sort || echo "No XML files found"
 
+          # Fail fast if coverage reports are still missing after reorganization
+          [ -f "coverage/$SERVICE/unit/jacoco.xml" ] || { echo "Missing unit coverage report for $SERVICE"; exit 1; }
+          [ -f "coverage/$SERVICE/integration/jacoco.xml" ] || { echo "Missing integration coverage report for $SERVICE"; exit 1; }
+
       - name: SonarQube analysis
         if: ${{ env.SONAR_TOKEN != '' }}
         env:
@@ -304,6 +308,8 @@ jobs:
         run: |
           host_url="${SONAR_HOST_URL:-https://sonarcloud.io}"
           project_key="${REPO_NAME}-${SERVICE}"
+          unit_report="${GITHUB_WORKSPACE}/coverage/${SERVICE}/unit/jacoco.xml"
+          integration_report="${GITHUB_WORKSPACE}/coverage/${SERVICE}/integration/jacoco.xml"
 
           cmd=(
             mvn -B -ntp
@@ -313,7 +319,7 @@ jobs:
             sonar:sonar
             "-Dsonar.host.url=${host_url}"
             "-Dsonar.projectKey=${project_key}"
-            "-Dsonar.coverage.jacoco.xmlReportPaths=coverage/${SERVICE}/unit/jacoco.xml,coverage/${SERVICE}/integration/jacoco.xml"
+            "-Dsonar.coverage.jacoco.xmlReportPaths=${unit_report},${integration_report}"
           )
 
           if [ -n "${SONAR_ORGANIZATION}" ]; then
