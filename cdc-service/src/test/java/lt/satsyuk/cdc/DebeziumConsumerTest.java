@@ -54,6 +54,23 @@ class DebeziumConsumerTest {
     }
 
     @Test
+    void clearsRedisIndexOnTruncateEvent() {
+        DebeziumConsumer consumer = new DebeziumConsumer(updater, new ObjectMapper());
+
+        consumer.handleDbChange("""
+                {
+                  "payload": {
+                    "op": "t",
+                    "after": null
+                  }
+                }
+                """);
+
+        verify(updater).clearIndex();
+        verify(updater, never()).updateQueryScore(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
     void ignoresBlankQuery() {
         DebeziumConsumer consumer = new DebeziumConsumer(updater, new ObjectMapper());
 

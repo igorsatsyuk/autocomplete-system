@@ -9,6 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.ReactiveZSetOperations;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.atLeastOnce;
@@ -57,6 +58,19 @@ class RedisSearchUpdaterTest {
                 .thenReturn(Mono.error(new IllegalStateException("redis down")));
 
         assertThatCode(() -> updater.updateQueryScore("java", 3L)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void clearsAllAutocompleteKeysByPrefix() {
+        when(redis.keys("autocomplete:*"))
+                .thenReturn(Flux.just("autocomplete:ja", "autocomplete:jav"));
+        when(redis.delete(ArgumentMatchers.any(org.reactivestreams.Publisher.class)))
+                .thenReturn(Mono.just(2L));
+
+        updater.clearIndex();
+
+        verify(redis).keys("autocomplete:*");
+        verify(redis).delete(ArgumentMatchers.any(org.reactivestreams.Publisher.class));
     }
 }
 

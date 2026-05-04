@@ -1,13 +1,13 @@
 -- Normalize historical keys to avoid split counters after trim-based aggregation.
 CREATE TEMP TABLE tmp_search_stats_normalized AS
 SELECT
-    lower(btrim(query)) AS query,
+    lower(btrim(query) COLLATE "C") AS query,
     SUM(frequency) AS frequency,
     MAX(updated_at) AS updated_at
 FROM search_stats
 WHERE query IS NOT NULL
-  AND lower(btrim(query)) <> ''
-GROUP BY lower(btrim(query));
+  AND lower(btrim(query) COLLATE "C") <> ''
+GROUP BY lower(btrim(query) COLLATE "C");
 
 TRUNCATE TABLE search_stats;
 

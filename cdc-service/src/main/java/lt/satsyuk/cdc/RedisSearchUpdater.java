@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.Locale;
 
@@ -51,6 +52,24 @@ public class RedisSearchUpdater {
                         },
                         ex -> log.error("Failed to update Redis index", ex),
                         () -> log.debug("Redis index updated for '{}'", normalized)
+                );
+    }
+
+    public void clearIndex() {
+        String pattern = redisPrefix + "*";
+        redis.keys(pattern)
+                .collectList()
+                .flatMap(keys -> {
+                    if (keys.isEmpty()) {
+                        return Mono.empty();
+                    }
+                    return redis.delete(Flux.fromIterable(keys)).then();
+                })
+                .subscribe(
+                        ignored -> {
+                        },
+                        ex -> log.error("Failed to clear Redis index", ex),
+                        () -> log.debug("Redis index cleared for pattern '{}'", pattern)
                 );
     }
 }

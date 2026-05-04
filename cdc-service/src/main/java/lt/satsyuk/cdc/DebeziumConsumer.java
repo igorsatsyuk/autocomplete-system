@@ -33,7 +33,14 @@ public class DebeziumConsumer {
 
         try {
             JsonNode root = objectMapper.readTree(message);
-            JsonNode after = root.path("payload").path("after");
+            JsonNode payload = root.path("payload");
+            String operation = payload.path("op").asText("");
+            if ("t".equals(operation)) {
+                updater.clearIndex();
+                return;
+            }
+
+            JsonNode after = payload.path("after");
             if (after.isMissingNode() || after.isNull()) {
                 return;
             }
