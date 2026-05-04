@@ -126,14 +126,17 @@ describe('AutocompleteService', () => {
 
       service.searchStream().subscribe(entries => results.push(entries));
 
-      // Send both queries within the debounce window so only 'jav' fires
       service.nextQuery('ja');
+      tick(150);
+      const firstReq = http.expectOne(r => r.url === '/api/complete' && r.params.get('q') === 'ja');
+
       service.nextQuery('jav');
       tick(150);
 
-      // Only one request for 'jav' should reach the HTTP layer
-      const req = http.expectOne(r => r.params.get('q') === 'jav');
-      req.flush([{ query: 'javascript', score: 8 }]);
+      expect(firstReq.cancelled).toBeTrue();
+
+      const secondReq = http.expectOne(r => r.url === '/api/complete' && r.params.get('q') === 'jav');
+      secondReq.flush([{ query: 'javascript', score: 8 }]);
 
       expect(results.length).toBe(1);
       expect(results[0][0].query).toBe('javascript');

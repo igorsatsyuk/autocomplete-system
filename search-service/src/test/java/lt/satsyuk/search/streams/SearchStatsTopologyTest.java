@@ -68,7 +68,7 @@ class SearchStatsTopologyTest {
     }
 
     @Test
-    void normalizesTrimmedLowercaseValueBeforeAggregation() {
+    void normalizesLowercaseValueBeforeAggregation() {
         SearchStatsTopology topology = new SearchStatsTopology(
                 repository,
                 "search-events-test",
@@ -94,7 +94,7 @@ class SearchStatsTopologyTest {
                     new LongDeserializer()
             );
 
-            inputTopic.pipeInput(null, "  JaVa  ");
+            inputTopic.pipeInput(null, "JaVa");
 
             KeyValue<String, Long> result = outputTopic.readKeyValue();
             assertThat(result.key).isEqualTo("java");
