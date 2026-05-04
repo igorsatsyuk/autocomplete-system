@@ -383,7 +383,21 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: frontend-coverage
-          path: frontend/coverage/autocomplete-frontend
+          path: frontend/coverage
+
+      - name: Ensure lcov.info is at expected path
+        if: ${{ env.SONAR_TOKEN != '' }}
+        shell: bash
+        run: |
+          expected="frontend/coverage/autocomplete-frontend/lcov.info"
+          lcov=$(find frontend/coverage -name "lcov.info" 2>/dev/null | head -1)
+          if [ -n "$lcov" ] && [ "$lcov" != "$expected" ]; then
+            mkdir -p "$(dirname "$expected")"
+            cp "$lcov" "$expected"
+            echo "Reorganized lcov: $lcov -> $expected"
+          fi
+          [ -f "$expected" ] || { echo "lcov.info not found after reorganization"; exit 1; }
+          echo "Coverage report verified at: $expected"
 
       - name: Configure SonarQube organization
         if: ${{ env.SONAR_TOKEN != '' && vars.SONAR_ORGANIZATION != '' }}
