@@ -79,7 +79,7 @@ jobs:
         with:
           name: unit-coverage-${{ matrix.service }}
           path: ${{ matrix.service }}/target/site/jacoco/jacoco.xml
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
 
       - name: Upload unit test reports
@@ -142,7 +142,7 @@ jobs:
         with:
           name: integration-coverage-${{ matrix.service }}
           path: ${{ matrix.service }}/target/site/jacoco/jacoco.xml
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
 
       - name: Upload integration test reports
