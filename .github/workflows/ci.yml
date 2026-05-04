@@ -263,24 +263,35 @@ jobs:
         shell: bash
         run: |
           SERVICE="${{ matrix.service }}"
+          mkdir -p coverage/$SERVICE/unit coverage/$SERVICE/integration
           
-          # Find and copy unit coverage XML to expected location
+          # Find unit coverage XML and ensure it's at the expected location
           unit_xml=$(find coverage/$SERVICE/unit -name "jacoco.xml" 2>/dev/null | head -1)
           if [ -f "$unit_xml" ]; then
-            cp "$unit_xml" coverage/$SERVICE/unit/jacoco.xml
-            echo "Copied unit coverage: $unit_xml -> coverage/$SERVICE/unit/jacoco.xml"
+            # Only copy if source and target are different
+            if [ "$unit_xml" != "coverage/$SERVICE/unit/jacoco.xml" ]; then
+              cp "$unit_xml" coverage/$SERVICE/unit/jacoco.xml
+              echo "Copied unit coverage: $unit_xml -> coverage/$SERVICE/unit/jacoco.xml"
+            else
+              echo "Unit coverage already at expected location: $unit_xml"
+            fi
           fi
           
-          # Find and copy integration coverage XML to expected location
+          # Find integration coverage XML and ensure it's at the expected location
           integration_xml=$(find coverage/$SERVICE/integration -name "jacoco.xml" 2>/dev/null | head -1)
           if [ -f "$integration_xml" ]; then
-            cp "$integration_xml" coverage/$SERVICE/integration/jacoco.xml
-            echo "Copied integration coverage: $integration_xml -> coverage/$SERVICE/integration/jacoco.xml"
+            # Only copy if source and target are different
+            if [ "$integration_xml" != "coverage/$SERVICE/integration/jacoco.xml" ]; then
+              cp "$integration_xml" coverage/$SERVICE/integration/jacoco.xml
+              echo "Copied integration coverage: $integration_xml -> coverage/$SERVICE/integration/jacoco.xml"
+            else
+              echo "Integration coverage already at expected location: $integration_xml"
+            fi
           fi
           
           # List files for verification
           echo "Final coverage structure:"
-          find coverage/$SERVICE -name "jacoco.xml" -o -name "*.xml" | sort || echo "No XML files found"
+          find coverage/$SERVICE -name "*.xml" | sort || echo "No XML files found"
 
       - name: SonarQube analysis
         if: ${{ env.SONAR_TOKEN != '' }}
