@@ -83,5 +83,14 @@ class DebeziumConsumerTest {
 
         verify(updater, never()).updateQueryScore(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong());
     }
+
+    @Test
+    void ignoresMalformedPayload() {
+        DebeziumConsumer consumer = new DebeziumConsumer(updater, new ObjectMapper());
+
+        consumer.handleDbChange("{not-json");
+
+        verify(updater, never()).updateQueryScore(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong());
+    }
 }
 

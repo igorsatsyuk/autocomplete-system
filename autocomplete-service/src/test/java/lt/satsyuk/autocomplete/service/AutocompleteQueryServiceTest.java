@@ -49,6 +49,14 @@ class AutocompleteQueryServiceTest {
     }
 
     @Test
+    void returnsEmptyFluxForNullPrefix() {
+        StepVerifier.create(service.suggest(null, 5))
+                .verifyComplete();
+
+        verify(redisTemplate, never()).opsForZSet();
+    }
+
+    @Test
     void returnsEmptyFluxForBlankPrefix() {
         StepVerifier.create(service.suggest("   ", 5))
                 .verifyComplete();

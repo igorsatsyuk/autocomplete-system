@@ -373,8 +373,8 @@ jobs:
           path: frontend/coverage/autocomplete-frontend
 
       - name: Configure SonarQube organization
-        if: ${{ env.SONAR_TOKEN != '' }}
-        run: echo "sonar.organization=${{ vars.SONAR_ORGANIZATION || github.repository_owner }}" >> frontend/sonar-project.properties
+        if: ${{ env.SONAR_TOKEN != '' && vars.SONAR_ORGANIZATION != '' }}
+        run: echo "sonar.organization=${{ vars.SONAR_ORGANIZATION }}" >> frontend/sonar-project.properties
 
       - name: SonarQube analysis (frontend)
         if: ${{ env.SONAR_TOKEN != '' }}

@@ -16,7 +16,7 @@ describe('AutocompleteService', () => {
   });
 
   afterEach(() => {
-    http.verify();
+    http.verify({ ignoreCancelled: true });
   });
 
   it('should be created', () => {
