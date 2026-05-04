@@ -64,7 +64,10 @@ public class KafkaConsumerConfig {
                     continue;
                 }
                 String kafkaPropertyName = propertyName.substring(CONSUMER_PROPERTIES_PREFIX.length());
-                properties.putIfAbsent(kafkaPropertyName, environment.getProperty(propertyName));
+                String propertyValue = environment.getProperty(propertyName);
+                if (propertyValue != null) {
+                    properties.putIfAbsent(kafkaPropertyName, propertyValue);
+                }
             }
         }
         return properties;

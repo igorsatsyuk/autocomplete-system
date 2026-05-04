@@ -14,13 +14,10 @@ public class SearchServiceApplication {
         SpringApplication.run(SearchServiceApplication.class, args);
     }
 
-    @Bean
+    @Bean(initMethod = "start", destroyMethod = "close")
     public KafkaStreams kafkaStreams(SearchStatsTopology topology) {
         StreamsBuilder builder = new StreamsBuilder();
         topology.build(builder);
-        KafkaStreams streams = new KafkaStreams(builder.build(), topology.streamsConfig());
-        streams.start();
-        Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
-        return streams;
+        return new KafkaStreams(builder.build(), topology.streamsConfig());
     }
 }

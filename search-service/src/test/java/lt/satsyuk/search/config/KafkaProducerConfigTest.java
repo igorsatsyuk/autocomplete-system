@@ -20,10 +20,12 @@ class KafkaProducerConfigTest {
         ProducerFactory<String, String> factory = config.producerFactory("kafka-test:9092");
 
         assertThat(factory).isInstanceOf(DefaultKafkaProducerFactory.class);
-        Map<String, Object> properties = ((DefaultKafkaProducerFactory<String, String>) factory).getConfigurationProperties();
-        assertThat(properties.get(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG)).isEqualTo("kafka-test:9092");
-        assertThat(properties.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG)).isEqualTo(StringSerializer.class);
-        assertThat(properties.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG)).isEqualTo(StringSerializer.class);
+        DefaultKafkaProducerFactory<String, String> kafkaFactory = (DefaultKafkaProducerFactory<String, String>) factory;
+        Map<String, Object> properties = kafkaFactory.getConfigurationProperties();
+        assertThat(properties)
+                .containsEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-test:9092")
+                .containsEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class)
+                .containsEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
     }
 
     @Test

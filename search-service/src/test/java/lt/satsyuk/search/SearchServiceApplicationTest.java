@@ -5,6 +5,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedConstruction;
 
 import java.util.Properties;
 
@@ -12,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -28,14 +30,13 @@ class SearchServiceApplicationTest {
         when(topology.streamsConfig()).thenReturn(properties);
 
         SearchServiceApplication application = new SearchServiceApplication();
-        KafkaStreams streams = application.kafkaStreams(topology);
+        try (MockedConstruction<KafkaStreams> kafkaStreams = org.mockito.Mockito.mockConstruction(KafkaStreams.class)) {
+            KafkaStreams streams = application.kafkaStreams(topology);
 
-        try {
             assertThat(streams).isNotNull();
-            verify(topology).build(any(StreamsBuilder.class));
-            verify(topology).streamsConfig();
-        } finally {
-            streams.close();
+            assertThat(kafkaStreams.constructed()).hasSize(1);
+            verify(topology, times(1)).build(any(StreamsBuilder.class));
+            verify(topology, times(1)).streamsConfig();
         }
     }
 }

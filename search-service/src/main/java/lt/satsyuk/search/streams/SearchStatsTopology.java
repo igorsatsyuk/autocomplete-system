@@ -10,6 +10,7 @@ import org.apache.kafka.streams.kstream.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.Properties;
 
 @Component
@@ -43,28 +44,28 @@ public class SearchStatsTopology {
                 Consumed.with(Serdes.String(), Serdes.String()));
 
         KTable<String, Long> counts = events
-                .selectKey((key, value) -> value.toLowerCase())
+                .mapValues(value -> value == null ? null : value.trim().toLowerCase(Locale.ROOT))
+                .filter((ignoredKey, value) -> value != null && !value.isBlank())
+                .selectKey((ignoredKey, value) -> value)
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
                 .count(Materialized.as(stateStoreName));
 
-        counts.toStream().peek((query, count) -> {
-            repository.findById(query)
-                    .ifPresentOrElse(
-                            stat -> {
-                                stat.setFrequency(count);
-                                repository.save(stat);
-                            },
-                            () -> repository.save(new SearchStat(query, count))
-                    );
-        }).to(searchStatsTopic, Produced.with(Serdes.String(), Serdes.Long()));
+        counts.toStream().peek((query, count) -> repository.findById(query)
+                .ifPresentOrElse(
+                        stat -> {
+                            stat.setFrequency(count);
+                            repository.save(stat);
+                        },
+                        () -> repository.save(new SearchStat(query, count))
+                )).to(searchStatsTopic, Produced.with(Serdes.String(), Serdes.Long()));
     }
 
     public Properties streamsConfig() {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, streamsApplicationId);
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         return props;
     }
 }

@@ -8,6 +8,8 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
+import java.util.Locale;
+
 @Service
 public class RedisSearchUpdater {
 
@@ -29,7 +31,10 @@ public class RedisSearchUpdater {
             return;
         }
 
-        String normalized = query.toLowerCase();
+        String normalized = query.trim().toLowerCase(Locale.ROOT);
+        if (normalized.isBlank()) {
+            return;
+        }
         log.debug("Updating Redis index for query='{}', count={}", normalized, count);
 
         Flux.range(1, normalized.length())
@@ -41,10 +46,8 @@ public class RedisSearchUpdater {
                             .then();
                 })
                 .then()
-                .subscribe(
-                        null,
-                        ex -> log.error("Failed to update Redis index", ex),
-                        () -> log.debug("Redis index updated for '{}'", normalized)
-                );
+                .doOnError(ex -> log.error("Failed to update Redis index", ex))
+                .doOnSuccess(ignored -> log.debug("Redis index updated for '{}'", normalized))
+                .subscribe();
     }
 }
