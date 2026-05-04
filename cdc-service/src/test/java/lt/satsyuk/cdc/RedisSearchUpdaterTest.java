@@ -8,6 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.ReactiveZSetOperations;
+import org.springframework.data.redis.core.ScanOptions;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Flux;
 
@@ -62,14 +63,14 @@ class RedisSearchUpdaterTest {
 
     @Test
     void clearsAllAutocompleteKeysByPrefix() {
-        when(redis.keys("autocomplete:*"))
+        when(redis.scan(ArgumentMatchers.any(ScanOptions.class)))
                 .thenReturn(Flux.just("autocomplete:ja", "autocomplete:jav"));
         when(redis.delete(ArgumentMatchers.any(org.reactivestreams.Publisher.class)))
                 .thenReturn(Mono.just(2L));
 
         updater.clearIndex();
 
-        verify(redis).keys("autocomplete:*");
+        verify(redis).scan(ArgumentMatchers.any(ScanOptions.class));
         verify(redis).delete(ArgumentMatchers.any(org.reactivestreams.Publisher.class));
     }
 }

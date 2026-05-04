@@ -5,9 +5,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
 
 import java.util.Locale;
 
@@ -55,21 +57,24 @@ public class RedisSearchUpdater {
                 );
     }
 
+    /**
+     * Deletes all Redis autocomplete keys matching the configured prefix.
+     * <p>
+     * Uses SCAN to avoid blocking Redis on large key spaces, and blocks
+     * the calling thread until deletion is complete.  This intentional
+     * synchronous block prevents a race where incoming Debezium INSERT
+     * events (arriving immediately after a TRUNCATE event) would call
+     * {@link #updateQueryScore} before the stale keys have been removed.
+     * </p>
+     */
     public void clearIndex() {
         String pattern = redisPrefix + "*";
-        redis.keys(pattern)
-                .collectList()
-                .flatMap(keys -> {
-                    if (keys.isEmpty()) {
-                        return Mono.empty();
-                    }
-                    return redis.delete(Flux.fromIterable(keys)).then();
+        redis.delete(redis.scan(ScanOptions.scanOptions().match(pattern).count(100).build()))
+                .onErrorResume(ex -> {
+                    log.error("Failed to clear Redis index", ex);
+                    return Mono.just(0L);
                 })
-                .subscribe(
-                        ignored -> {
-                        },
-                        ex -> log.error("Failed to clear Redis index", ex),
-                        () -> log.debug("Redis index cleared for pattern '{}'", pattern)
-                );
+                .doOnSuccess(count -> log.debug("Redis index cleared {} key(s) for pattern '{}'", count, pattern))
+                .block();
     }
 }
