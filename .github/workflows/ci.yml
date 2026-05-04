@@ -28,7 +28,7 @@ jobs:
       # Share the populated Maven cache with downstream jobs via upload-artifact
       # (cheap: only the lt.satsyuk:common jar + metadata)
       - name: Cache common jar for downstream jobs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: common-m2
           path: ~/.m2/repository/lt/satsyuk/common
