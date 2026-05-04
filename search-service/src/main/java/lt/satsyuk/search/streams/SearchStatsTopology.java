@@ -10,6 +10,7 @@ import org.apache.kafka.streams.kstream.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.Properties;
 
 @Component
@@ -43,7 +44,7 @@ public class SearchStatsTopology {
                 Consumed.with(Serdes.String(), Serdes.String()));
 
         KTable<String, Long> counts = events
-                .mapValues(value -> value == null ? null : value.toLowerCase())
+                .mapValues(value -> value == null ? null : value.trim().toLowerCase(Locale.ROOT))
                 .filter((ignoredKey, value) -> value != null && !value.isBlank())
                 .selectKey((ignoredKey, value) -> value)
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
