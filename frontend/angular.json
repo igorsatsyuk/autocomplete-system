@@ -58,7 +58,7 @@
             "assets": [],
             "styles": [],
             "scripts": [],
-            "codeCoverage": true
+            "codeCoverage": false
           }
         }
       }
