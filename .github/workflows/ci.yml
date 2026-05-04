@@ -263,25 +263,24 @@ jobs:
         shell: bash
         run: |
           SERVICE="${{ matrix.service }}"
-          mkdir -p coverage/$SERVICE/unit coverage/$SERVICE/integration
-
-          # Move downloaded jacoco.xml files to expected locations
-          # Unit coverage may be nested under service directory
-          if [ -f "${SERVICE}/target/site/jacoco/jacoco.xml" ]; then
-            mkdir -p coverage/$SERVICE/unit
-            cp "${SERVICE}/target/site/jacoco/jacoco.xml" coverage/$SERVICE/unit/jacoco.xml
+          
+          # Find and copy unit coverage XML to expected location
+          unit_xml=$(find coverage/$SERVICE/unit -name "jacoco.xml" 2>/dev/null | head -1)
+          if [ -f "$unit_xml" ]; then
+            cp "$unit_xml" coverage/$SERVICE/unit/jacoco.xml
+            echo "Copied unit coverage: $unit_xml -> coverage/$SERVICE/unit/jacoco.xml"
           fi
-
-          # Integration coverage may be nested similarly
-          if [ -f "${SERVICE}/target/site/jacoco/jacoco.xml" ] && [ -d "coverage/$SERVICE/integration" ]; then
-            if [ ! -f "coverage/$SERVICE/integration/jacoco.xml" ]; then
-              cp "${SERVICE}/target/site/jacoco/jacoco.xml" coverage/$SERVICE/integration/jacoco.xml
-            fi
+          
+          # Find and copy integration coverage XML to expected location
+          integration_xml=$(find coverage/$SERVICE/integration -name "jacoco.xml" 2>/dev/null | head -1)
+          if [ -f "$integration_xml" ]; then
+            cp "$integration_xml" coverage/$SERVICE/integration/jacoco.xml
+            echo "Copied integration coverage: $integration_xml -> coverage/$SERVICE/integration/jacoco.xml"
           fi
-
+          
           # List files for verification
-          echo "Coverage reports structure:"
-          find coverage -type f -name "jacoco.xml" || echo "No jacoco.xml files found"
+          echo "Final coverage structure:"
+          find coverage/$SERVICE -name "jacoco.xml" -o -name "*.xml" | sort || echo "No XML files found"
 
       - name: SonarQube analysis
         if: ${{ env.SONAR_TOKEN != '' }}
