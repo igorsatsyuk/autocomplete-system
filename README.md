@@ -154,27 +154,55 @@ docker compose exec redis redis-cli ZREVRANGE autocomplete:ja 0 9 WITHSCORES
 
 Backend modules are independent Maven projects. Install `common` first when running outside Docker.
 
-Unit + integration tests (integration tests run with Docker, otherwise skip safely):
+Install shared module:
 
 ```powershell
 Set-Location .\common
 mvn -B -DskipTests install
+```
 
+Run unit tests only (`*Test` via Surefire):
+
+```powershell
 Set-Location ..\search-service
-mvn -B test
+mvn -B -ntp test
 
 Set-Location ..\cdc-service
-mvn -B test
+mvn -B -ntp test
 
 Set-Location ..\autocomplete-service
-mvn -B test
+mvn -B -ntp test
+```
+
+Run integration tests only (`*IT` via Failsafe; requires Docker, otherwise tests skip safely):
+
+```powershell
+Set-Location ..\search-service
+mvn -B -ntp test-compile failsafe:integration-test failsafe:verify
+
+Set-Location ..\cdc-service
+mvn -B -ntp test-compile failsafe:integration-test failsafe:verify
+
+Set-Location ..\autocomplete-service
+mvn -B -ntp test-compile failsafe:integration-test failsafe:verify
 ```
 
 Known test classes:
 
-- `search-service`: `SearchControllerTest`, `SearchEventProducerTest`, `SearchStatsTopologyTest`, `SearchServiceKafkaIntegrationTest`
-- `cdc-service`: `DebeziumConsumerTest`, `CdcServiceRedisIntegrationTest`
-- `autocomplete-service`: `AutocompleteQueryServiceTest`, `AutocompleteServiceRedisIntegrationTest`
+- `search-service`: `SearchControllerTest`, `SearchEventProducerTest`, `SearchStatsTopologyTest`, `SearchServiceKafkaIT`
+- `cdc-service`: `DebeziumConsumerTest`, `CdcServiceRedisIT`
+- `autocomplete-service`: `AutocompleteQueryServiceTest`, `AutocompleteServiceRedisIT`
+
+## CI Pipeline
+
+GitHub Actions workflow: `.github/workflows/ci.yml`.
+
+- Backend unit tests run in matrix job `backend-unit` (`mvn test`).
+- Backend integration tests run in matrix job `backend-integration` (`failsafe:integration-test` + `failsafe:verify`).
+- JUnit XML reports are uploaded as artifacts: `unit-test-reports-<service>` and `integration-test-reports-<service>`.
+- SonarQube runs in matrix job `sonarqube` for backend services.
+- Required CI secret: `SONAR_TOKEN`.
+- Optional CI vars: `SONAR_HOST_URL` (default `https://sonarcloud.io`), `SONAR_ORGANIZATION`.
 
 ## Local Development (Without Docker for App Processes)
 
