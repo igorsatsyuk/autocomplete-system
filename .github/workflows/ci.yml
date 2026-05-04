@@ -71,7 +71,16 @@ jobs:
           path: ~/.m2/repository/lt/satsyuk/common
 
       - name: Run unit tests
-        run: mvn -B -ntp -f ${{ matrix.service }}/pom.xml test
+        run: mvn -B -ntp -f ${{ matrix.service }}/pom.xml test jacoco:report
+
+      - name: Upload unit coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: unit-coverage-${{ matrix.service }}
+          path: ${{ matrix.service }}/target/site/jacoco/jacoco.xml
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload unit test reports
         if: always()
@@ -125,7 +134,16 @@ jobs:
           path: ~/.m2/repository/lt/satsyuk/common
 
       - name: Run integration tests
-        run: mvn -B -ntp -f ${{ matrix.service }}/pom.xml test-compile failsafe:integration-test failsafe:verify
+        run: mvn -B -ntp -f ${{ matrix.service }}/pom.xml test-compile failsafe:integration-test failsafe:verify jacoco:report
+
+      - name: Upload integration coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: integration-coverage-${{ matrix.service }}
+          path: ${{ matrix.service }}/target/site/jacoco/jacoco.xml
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload integration test reports
         if: always()
@@ -226,6 +244,59 @@ jobs:
           key: ${{ runner.os }}-sonar-${{ matrix.service }}
           restore-keys: ${{ runner.os }}-sonar-
 
+      - name: Download unit coverage report
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: unit-coverage-${{ matrix.service }}
+          path: coverage/${{ matrix.service }}/unit
+
+      - name: Download integration coverage report
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: integration-coverage-${{ matrix.service }}
+          path: coverage/${{ matrix.service }}/integration
+
+      - name: Reorganize coverage reports for SonarQube
+        if: ${{ env.SONAR_TOKEN != '' }}
+        shell: bash
+        run: |
+          SERVICE="${{ matrix.service }}"
+          mkdir -p coverage/$SERVICE/unit coverage/$SERVICE/integration
+          
+          # Find unit coverage XML and ensure it's at the expected location
+          unit_xml=$(find coverage/$SERVICE/unit -name "jacoco.xml" 2>/dev/null | head -1)
+          if [ -f "$unit_xml" ]; then
+            # Only copy if source and target are different
+            if [ "$unit_xml" != "coverage/$SERVICE/unit/jacoco.xml" ]; then
+              cp "$unit_xml" coverage/$SERVICE/unit/jacoco.xml
+              echo "Copied unit coverage: $unit_xml -> coverage/$SERVICE/unit/jacoco.xml"
+            else
+              echo "Unit coverage already at expected location: $unit_xml"
+            fi
+          fi
+          
+          # Find integration coverage XML and ensure it's at the expected location
+          integration_xml=$(find coverage/$SERVICE/integration -name "jacoco.xml" 2>/dev/null | head -1)
+          if [ -f "$integration_xml" ]; then
+            # Only copy if source and target are different
+            if [ "$integration_xml" != "coverage/$SERVICE/integration/jacoco.xml" ]; then
+              cp "$integration_xml" coverage/$SERVICE/integration/jacoco.xml
+              echo "Copied integration coverage: $integration_xml -> coverage/$SERVICE/integration/jacoco.xml"
+            else
+              echo "Integration coverage already at expected location: $integration_xml"
+            fi
+          fi
+          
+          # List files for verification
+          echo "Final coverage structure:"
+          find coverage/$SERVICE -name "*.xml" | sort || echo "No XML files found"
+
+          # Fail fast if coverage reports are still missing after reorganization
+          [ -f "coverage/$SERVICE/unit/jacoco.xml" ] || { echo "Missing unit coverage report for $SERVICE"; exit 1; }
+          [ -f "coverage/$SERVICE/integration/jacoco.xml" ] || { echo "Missing integration coverage report for $SERVICE"; exit 1; }
+
       - name: SonarQube analysis
         if: ${{ env.SONAR_TOKEN != '' }}
         env:
@@ -237,6 +308,8 @@ jobs:
         run: |
           host_url="${SONAR_HOST_URL:-https://sonarcloud.io}"
           project_key="${REPO_NAME}-${SERVICE}"
+          unit_report="${GITHUB_WORKSPACE}/coverage/${SERVICE}/unit/jacoco.xml"
+          integration_report="${GITHUB_WORKSPACE}/coverage/${SERVICE}/integration/jacoco.xml"
 
           cmd=(
             mvn -B -ntp
@@ -246,6 +319,7 @@ jobs:
             sonar:sonar
             "-Dsonar.host.url=${host_url}"
             "-Dsonar.projectKey=${project_key}"
+            "-Dsonar.coverage.jacoco.xmlReportPaths=${unit_report},${integration_report}"
           )
 
           if [ -n "${SONAR_ORGANIZATION}" ]; then
