@@ -173,6 +173,7 @@ jobs:
     permissions:
       contents: read
       actions: write
+      checks: write
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -191,6 +192,19 @@ jobs:
       - name: Lint
         working-directory: frontend
         run: npm run lint --if-present
+
+      - name: Test
+        working-directory: frontend
+        run: npm run test:ci
+
+      - name: Upload frontend coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/autocomplete-frontend/lcov.info
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Build
         working-directory: frontend
@@ -328,7 +342,49 @@ jobs:
 
           "${cmd[@]}"
 
-  # --- 6. Docker build (no push on PRs) ----------------------------------------
+  # --- 6. SonarQube – frontend -------------------------------------------------
+  sonarqube-frontend:
+    name: SonarQube - frontend
+    runs-on: ubuntu-latest
+    needs: [frontend]
+    permissions:
+      contents: read
+      actions: write
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.actor != 'dependabot[bot]')
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: SonarQube skipped (missing token)
+        if: ${{ env.SONAR_TOKEN == '' }}
+        run: echo "SONAR_TOKEN is not set. Skipping SonarQube analysis."
+
+      - name: Download frontend coverage report
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/autocomplete-frontend
+
+      - name: Configure SonarQube organization
+        if: ${{ env.SONAR_TOKEN != '' && vars.SONAR_ORGANIZATION != '' }}
+        run: echo "sonar.organization=${{ vars.SONAR_ORGANIZATION }}" >> frontend/sonar-project.properties
+
+      - name: SonarQube analysis (frontend)
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: SonarSource/sonarqube-scan-action@aa494459f48a9a5a9ae94b5c8e193a4b73f4e7e2 # v5.1.0
+        env:
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL || 'https://sonarcloud.io' }}
+        with:
+          projectBaseDir: frontend
+
+  # --- 7. Docker build (no push on PRs) ----------------------------------------
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
