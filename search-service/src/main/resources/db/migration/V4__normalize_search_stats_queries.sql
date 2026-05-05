@@ -10,18 +10,36 @@
 --   3. The Kafka Streams state store is versioned (search-counts-v2) to avoid
 --      stale trim-inconsistent state being carried across this migration.
 --
--- Uses C-locale lower() (equivalent to Locale.ROOT) so keys match what Java
--- services produce with String.toLowerCase(Locale.ROOT).
+-- Lowercasing during migration is applied only to ASCII keys.
+-- Non-ASCII keys are kept as-is to avoid locale/collation-dependent rewrites
+-- that may diverge from Java String.toLowerCase(Locale.ROOT).
 
 CREATE TEMP TABLE tmp_search_stats_normalized AS
+WITH trimmed AS (
+    SELECT
+        btrim(query, E' \t\n\r\f') AS trimmed_query,
+        frequency,
+        updated_at
+    FROM search_stats
+    WHERE query IS NOT NULL
+), normalized AS (
+    SELECT
+        CASE
+            WHEN octet_length(trimmed_query) = char_length(trimmed_query)
+                THEN lower(trimmed_query)
+            ELSE trimmed_query
+        END AS query,
+        frequency,
+        updated_at
+    FROM trimmed
+)
 SELECT
-    lower(btrim(query, E' \t\n\r\f') COLLATE "C") AS query,
+    query,
     SUM(frequency) AS frequency,
     MAX(updated_at) AS updated_at
-FROM search_stats
-WHERE query IS NOT NULL
-  AND lower(btrim(query, E' \t\n\r\f') COLLATE "C") <> ''
-GROUP BY lower(btrim(query, E' \t\n\r\f') COLLATE "C");
+FROM normalized
+WHERE query <> ''
+GROUP BY query;
 
 TRUNCATE TABLE search_stats;
 
