@@ -17,6 +17,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+import org.testcontainers.lifecycle.Startables;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -30,6 +31,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -46,6 +48,11 @@ class SearchServiceKafkaIT {
     @Container
     static final KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
 
+    static {
+        Startables.deepStart(Stream.of(postgres, kafka)).join();
+        createTopicsBeforeStartup(KafkaTopics.SEARCH_EVENTS, KafkaTopics.SEARCH_STATS);
+    }
+
     @DynamicPropertySource
     static void configure(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
@@ -54,7 +61,6 @@ class SearchServiceKafkaIT {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         registry.add("spring.kafka.streams.bootstrap-servers", kafka::getBootstrapServers);
 
-        createTopicsBeforeStartup(KafkaTopics.SEARCH_EVENTS, KafkaTopics.SEARCH_STATS);
     }
 
     @LocalServerPort

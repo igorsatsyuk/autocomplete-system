@@ -10,6 +10,7 @@ import org.apache.kafka.streams.kstream.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.Properties;
 
 @Component
@@ -73,16 +74,7 @@ public class SearchStatsTopology {
             return null;
         }
 
-        String trimmed = raw.trim();
-        StringBuilder normalized = new StringBuilder(trimmed.length());
-        for (int i = 0; i < trimmed.length(); i++) {
-            char current = trimmed.charAt(i);
-            if (current >= 'A' && current <= 'Z') {
-                normalized.append((char) (current + ('a' - 'A')));
-            } else {
-                normalized.append(current);
-            }
-        }
-        return normalized.toString();
+        return raw.trim().toLowerCase(Locale.ROOT);
     }
 }
+
