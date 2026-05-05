@@ -52,7 +52,6 @@ class SearchServiceKafkaIT {
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         registry.add("spring.kafka.streams.bootstrap-servers", kafka::getBootstrapServers);
-        createTopicsBeforeStartup(KafkaTopics.SEARCH_EVENTS, KafkaTopics.SEARCH_STATS);
 
     }
 
@@ -61,6 +60,8 @@ class SearchServiceKafkaIT {
 
     @Test
     void searchEndpointPublishesEventToKafkaTopic() throws Exception {
+        createTopicsBeforeStartup(KafkaTopics.SEARCH_EVENTS, KafkaTopics.SEARCH_STATS);
+
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/search?q=java"))
                 .GET()
