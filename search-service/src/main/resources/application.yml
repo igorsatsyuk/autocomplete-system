@@ -51,7 +51,7 @@ search:
     stats: ${SEARCH_TOPIC_STATS:search-stats}
   streams:
     application-id: ${SEARCH_STREAMS_APPLICATION_ID:${SPRING_KAFKA_STREAMS_APPLICATION_ID:search-stats-app}}
-    state-store: ${SEARCH_STREAMS_STATE_STORE:search-counts}
+    state-store: ${SEARCH_STREAMS_STATE_STORE:search-counts-v2}
 
 ---
 spring:
