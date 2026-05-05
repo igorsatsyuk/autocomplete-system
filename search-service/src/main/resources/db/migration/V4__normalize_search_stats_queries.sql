@@ -15,13 +15,11 @@
 --      If SEARCH_STREAMS_APPLICATION_ID/search.streams.application-id is overridden,
 --      use a fresh application id during rollout as well.
 --
--- SQL lower() depends on DB collation and can diverge from Java Locale.ROOT
--- for non-ASCII text (for example Turkish locale rules). To avoid rewriting
--- historical rows into keys that runtime services will never use:
+-- Normalize historical rows using the same high-level contract as runtime:
+-- trim first, then lowercase, then drop effectively blank keys.
 --   1. Trim all queries (Java String.trim() compat: [\u0000-\u0020])
---   2. Apply lower() only to ASCII-safe values
---   3. Keep non-ASCII values trim-normalized only (no locale-sensitive rewrite)
---   4. Drop rows that are effectively blank under Java isBlank() semantics
+--   2. Lowercase all trimmed values so historical keys converge with runtime
+--   3. Drop rows that are effectively blank under Java isBlank() semantics
 --      (including Unicode space separators like U+2003 EM SPACE)
 
 CREATE TEMP TABLE tmp_search_stats_normalized AS
@@ -35,7 +33,7 @@ WITH normalized AS (
     WHERE query IS NOT NULL
 ), collapsed AS (
     SELECT
-        CASE WHEN trimmed_query ~ '^[\\000-\\177]*$' THEN lower(trimmed_query) ELSE trimmed_query END AS query,
+        lower(trimmed_query) AS query,
         frequency,
         updated_at
     FROM normalized
