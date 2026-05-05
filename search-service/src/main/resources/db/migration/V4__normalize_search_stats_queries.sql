@@ -10,23 +10,31 @@
 --   3. The Kafka Streams state store is versioned (search-counts-v2) to avoid
 --      stale trim-inconsistent state being carried across this migration.
 --
--- Lowercasing is applied to all trimmed keys so historical rows do not remain
--- split by case after runtime normalization.
+-- SQL lower() depends on DB collation and can diverge from Java Locale.ROOT for
+-- non-ASCII text. Apply lower() only to ASCII-safe values to avoid locale-driven
+-- rewrites; non-ASCII values are trim-normalized only.
 
 CREATE TEMP TABLE tmp_search_stats_normalized AS
 WITH normalized AS (
     SELECT
-        lower(btrim(query, E' \t\n\r\f')) AS query,
+        -- Java String.trim() removes leading/trailing chars in [\u0000-\u0020].
+        regexp_replace(query, E'^[\\000-\\040]+|[\\000-\\040]+$', '', 'g') AS trimmed_query,
         frequency,
         updated_at
     FROM search_stats
     WHERE query IS NOT NULL
+), collapsed AS (
+    SELECT
+        CASE WHEN trimmed_query ~ '^[\\000-\\177]*$' THEN lower(trimmed_query) ELSE trimmed_query END AS query,
+        frequency,
+        updated_at
+    FROM normalized
 )
 SELECT
     query,
     SUM(frequency) AS frequency,
     MAX(updated_at) AS updated_at
-FROM normalized
+FROM collapsed
 WHERE query <> ''
 GROUP BY query;
 
