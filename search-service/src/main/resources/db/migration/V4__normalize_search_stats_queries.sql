@@ -15,13 +15,13 @@
 
 CREATE TEMP TABLE tmp_search_stats_normalized AS
 SELECT
-    lower(btrim(query) COLLATE "C") AS query,
+    lower(btrim(query, E' \t\n\r\f') COLLATE "C") AS query,
     SUM(frequency) AS frequency,
     MAX(updated_at) AS updated_at
 FROM search_stats
 WHERE query IS NOT NULL
-  AND lower(btrim(query) COLLATE "C") <> ''
-GROUP BY lower(btrim(query) COLLATE "C");
+  AND lower(btrim(query, E' \t\n\r\f') COLLATE "C") <> ''
+GROUP BY lower(btrim(query, E' \t\n\r\f') COLLATE "C");
 
 TRUNCATE TABLE search_stats;
 
