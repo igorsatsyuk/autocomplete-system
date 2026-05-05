@@ -44,6 +44,8 @@ class RedisSearchUpdaterTest {
     @Test
     void normalizesQueryBeforeWritingRedisPrefixes() {
         when(redis.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.score(ArgumentMatchers.anyString(), ArgumentMatchers.anyString()))
+                .thenReturn(Mono.empty());
         when(zSetOperations.add(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyDouble()))
                 .thenReturn(Mono.just(Boolean.TRUE));
 
@@ -62,6 +64,8 @@ class RedisSearchUpdaterTest {
     @Test
     void swallowsRedisErrorsWithoutThrowing() {
         when(redis.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.score(ArgumentMatchers.anyString(), ArgumentMatchers.anyString()))
+                .thenReturn(Mono.empty());
         when(zSetOperations.add(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyDouble()))
                 .thenReturn(Mono.error(new IllegalStateException("redis down")));
 
@@ -102,6 +106,8 @@ class RedisSearchUpdaterTest {
         AtomicBoolean clearCompletedBeforeSecondUpdate = new AtomicBoolean(false);
 
         when(redis.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.score(ArgumentMatchers.anyString(), ArgumentMatchers.anyString()))
+                .thenReturn(Mono.empty());
         when(zSetOperations.add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("java"), ArgumentMatchers.eq(1.0)))
                 .thenAnswer(invocation -> Mono.fromRunnable(() -> {
                     firstUpdateStarted.countDown();
@@ -141,6 +147,18 @@ class RedisSearchUpdaterTest {
         verify(redis).delete(ArgumentMatchers.any(org.reactivestreams.Publisher.class));
         verify(zSetOperations, atLeastOnce())
                 .add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("blocked"), ArgumentMatchers.eq(2.0));
+    }
+
+    @Test
+    void doesNotOverwriteHigherScoreWithLowerOutOfOrderUpdate() {
+        when(redis.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.score(ArgumentMatchers.anyString(), ArgumentMatchers.eq("java")))
+                .thenReturn(Mono.just(10.0));
+
+        updater.updateQueryScore("java", 5L);
+
+        verify(zSetOperations, never())
+                .add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("java"), ArgumentMatchers.eq(5.0));
     }
 }
 

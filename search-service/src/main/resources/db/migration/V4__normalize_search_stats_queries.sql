@@ -12,12 +12,16 @@
 --      avoid stale trim-inconsistent state being carried across this migration.
 --      If SEARCH_STREAMS_STATE_STORE/search.streams.state-store is overridden,
 --      use a fresh store name during rollout.
+--      If SEARCH_STREAMS_APPLICATION_ID/search.streams.application-id is overridden,
+--      use a fresh application id during rollout as well.
 --
--- Normalize historical rows to the same trim+lower shape expected by runtime
--- query processing, then drop rows that are blank under Java isBlank().
+-- SQL lower() depends on DB collation and can diverge from Java Locale.ROOT
+-- for non-ASCII text (for example Turkish locale rules). To avoid rewriting
+-- historical rows into keys that runtime services will never use:
 --   1. Trim all queries (Java String.trim() compat: [\u0000-\u0020])
---   2. Lowercase all trimmed queries to collapse mixed-case history
---   3. Drop rows that are effectively blank under Java isBlank() semantics
+--   2. Apply lower() only to ASCII-safe values
+--   3. Keep non-ASCII values trim-normalized only (no locale-sensitive rewrite)
+--   4. Drop rows that are effectively blank under Java isBlank() semantics
 --      (including Unicode space separators like U+2003 EM SPACE)
 
 CREATE TEMP TABLE tmp_search_stats_normalized AS
@@ -31,7 +35,7 @@ WITH normalized AS (
     WHERE query IS NOT NULL
 ), collapsed AS (
     SELECT
-        lower(trimmed_query) AS query,
+        CASE WHEN trimmed_query ~ '^[\\000-\\177]*$' THEN lower(trimmed_query) ELSE trimmed_query END AS query,
         frequency,
         updated_at
     FROM normalized

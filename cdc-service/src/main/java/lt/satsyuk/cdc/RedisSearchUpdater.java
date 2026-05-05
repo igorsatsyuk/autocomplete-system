@@ -50,9 +50,12 @@ public class RedisSearchUpdater {
                     .map(i -> normalized.substring(0, i))
                     .flatMap(prefix -> {
                         String key = redisPrefix + prefix;
-                        return redis.opsForZSet()
-                                .add(key, normalized, count)
-                                .then();
+                            return redis.opsForZSet()
+                                    .score(key, normalized)
+                                    .defaultIfEmpty(Double.NEGATIVE_INFINITY)
+                                    .filter(currentScore -> currentScore <= (double) count)
+                                    .flatMap(ignored -> redis.opsForZSet().add(key, normalized, count))
+                                    .then();
                     })
                     .then()
                     .doOnSuccess(ignored -> log.debug("Redis index updated for '{}'", normalized))
