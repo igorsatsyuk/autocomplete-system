@@ -7,7 +7,6 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
-import org.springframework.data.redis.core.ReactiveZSetOperations;
 import org.springframework.data.redis.core.ScanOptions;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Flux;
@@ -21,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,9 +31,6 @@ class RedisSearchUpdaterTest {
     @Mock
     private ReactiveStringRedisTemplate redis;
 
-    @Mock
-    private ReactiveZSetOperations<String, String> zSetOperations;
-
     private RedisSearchUpdater updater;
 
     @BeforeEach
@@ -43,31 +40,25 @@ class RedisSearchUpdaterTest {
 
     @Test
     void normalizesQueryBeforeWritingRedisPrefixes() {
-        when(redis.opsForZSet()).thenReturn(zSetOperations);
-        when(zSetOperations.score(ArgumentMatchers.anyString(), ArgumentMatchers.anyString()))
-                .thenReturn(Mono.empty());
-        when(zSetOperations.add(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyDouble()))
-                .thenReturn(Mono.just(Boolean.TRUE));
+        when(redis.execute(any(), ArgumentMatchers.anyList(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(Flux.just(1L));
 
         updater.updateQueryScore("  JaVa  ", 5L);
 
-        verify(zSetOperations, atLeastOnce()).add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("java"), ArgumentMatchers.eq(5.0));
+        verify(redis, atLeastOnce()).execute(any(), ArgumentMatchers.anyList(), ArgumentMatchers.eq("java"), ArgumentMatchers.eq("5"));
     }
 
     @Test
     void ignoresBlankQueryAfterTrim() {
         updater.updateQueryScore("   ", 5L);
 
-        verify(redis, never()).opsForZSet();
+        verify(redis, never()).execute(any(), ArgumentMatchers.anyList(), ArgumentMatchers.any(), ArgumentMatchers.any());
     }
 
     @Test
     void swallowsRedisErrorsWithoutThrowing() {
-        when(redis.opsForZSet()).thenReturn(zSetOperations);
-        when(zSetOperations.score(ArgumentMatchers.anyString(), ArgumentMatchers.anyString()))
-                .thenReturn(Mono.empty());
-        when(zSetOperations.add(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyDouble()))
-                .thenReturn(Mono.error(new IllegalStateException("redis down")));
+        when(redis.execute(any(), ArgumentMatchers.anyList(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(Flux.error(new IllegalStateException("redis down")));
 
         assertThatCode(() -> updater.updateQueryScore("java", 3L)).doesNotThrowAnyException();
     }
@@ -105,19 +96,16 @@ class RedisSearchUpdaterTest {
         CountDownLatch secondUpdateReachedRedis = new CountDownLatch(1);
         AtomicBoolean clearCompletedBeforeSecondUpdate = new AtomicBoolean(false);
 
-        when(redis.opsForZSet()).thenReturn(zSetOperations);
-        when(zSetOperations.score(ArgumentMatchers.anyString(), ArgumentMatchers.anyString()))
-                .thenReturn(Mono.empty());
-        when(zSetOperations.add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("java"), ArgumentMatchers.eq(1.0)))
-                .thenAnswer(invocation -> Mono.fromRunnable(() -> {
+        when(redis.execute(any(), ArgumentMatchers.anyList(), ArgumentMatchers.eq("java"), ArgumentMatchers.eq("1")))
+                .thenAnswer(invocation -> Flux.from(Mono.fromRunnable(() -> {
                     firstUpdateStarted.countDown();
                     await().atMost(Duration.ofSeconds(2)).until(() -> releaseFirstUpdate.getCount() == 0);
-                }).thenReturn(Boolean.TRUE));
-        when(zSetOperations.add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("blocked"), ArgumentMatchers.eq(2.0)))
-                .thenAnswer(invocation -> Mono.fromRunnable(() -> {
+                }).thenReturn(1L)));
+        when(redis.execute(any(), ArgumentMatchers.anyList(), ArgumentMatchers.eq("blocked"), ArgumentMatchers.eq("2")))
+                .thenAnswer(invocation -> Flux.from(Mono.fromRunnable(() -> {
                     clearCompletedBeforeSecondUpdate.set(clearFinished.getCount() == 0);
                     secondUpdateReachedRedis.countDown();
-                }).thenReturn(Boolean.TRUE));
+                }).thenReturn(1L)));
 
         when(redis.scan(ArgumentMatchers.any(ScanOptions.class)))
                 .thenReturn(Flux.just("autocomplete:ja"));
@@ -145,20 +133,19 @@ class RedisSearchUpdaterTest {
 
         assertThat(clearCompletedBeforeSecondUpdate.get()).isTrue();
         verify(redis).delete(ArgumentMatchers.any(org.reactivestreams.Publisher.class));
-        verify(zSetOperations, atLeastOnce())
-                .add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("blocked"), ArgumentMatchers.eq(2.0));
+        verify(redis, atLeastOnce())
+                .execute(any(), ArgumentMatchers.anyList(), ArgumentMatchers.eq("blocked"), ArgumentMatchers.eq("2"));
     }
 
     @Test
-    void doesNotOverwriteHigherScoreWithLowerOutOfOrderUpdate() {
-        when(redis.opsForZSet()).thenReturn(zSetOperations);
-        when(zSetOperations.score(ArgumentMatchers.anyString(), ArgumentMatchers.eq("java")))
-                .thenReturn(Mono.just(10.0));
+    void usesAtomicScriptExecutionForUpdates() {
+        when(redis.execute(any(), ArgumentMatchers.anyList(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(Flux.just(0L));
 
         updater.updateQueryScore("java", 5L);
 
-        verify(zSetOperations, never())
-                .add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("java"), ArgumentMatchers.eq(5.0));
+        verify(redis, atLeastOnce())
+                .execute(any(), ArgumentMatchers.anyList(), ArgumentMatchers.eq("java"), ArgumentMatchers.eq("5"));
     }
 }
 

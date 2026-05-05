@@ -249,8 +249,12 @@ jobs:
         if: ${{ env.SONAR_TOKEN == '' }}
         run: echo "SONAR_TOKEN is not set. Skipping SonarQube analysis."
 
+      - name: SonarQube skipped (missing organization on SonarCloud)
+        if: ${{ env.SONAR_TOKEN != '' && (vars.SONAR_HOST_URL == '' || vars.SONAR_HOST_URL == 'https://sonarcloud.io') && vars.SONAR_ORGANIZATION == '' }}
+        run: echo "SONAR_ORGANIZATION is required for SonarCloud. Skipping backend SonarQube analysis."
+
       - name: Cache SonarQube packages
-        if: ${{ env.SONAR_TOKEN != '' }}
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.2.3
         with:
           path: ~/.sonar/cache
@@ -258,21 +262,21 @@ jobs:
           restore-keys: ${{ runner.os }}-sonar-
 
       - name: Download unit coverage report
-        if: ${{ env.SONAR_TOKEN != '' }}
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: unit-coverage-${{ matrix.service }}
           path: coverage/${{ matrix.service }}/unit
 
       - name: Download integration coverage report
-        if: ${{ env.SONAR_TOKEN != '' }}
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: integration-coverage-${{ matrix.service }}
           path: coverage/${{ matrix.service }}/integration
 
       - name: Reorganize coverage reports for SonarQube
-        if: ${{ env.SONAR_TOKEN != '' }}
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
         shell: bash
         run: |
           SERVICE="${{ matrix.service }}"
@@ -311,7 +315,7 @@ jobs:
           [ -f "coverage/$SERVICE/integration/jacoco.xml" ] || { echo "Missing integration coverage report for $SERVICE"; exit 1; }
 
       - name: SonarQube analysis
-        if: ${{ env.SONAR_TOKEN != '' }}
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
         env:
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
           SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}

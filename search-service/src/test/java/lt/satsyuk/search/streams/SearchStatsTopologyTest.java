@@ -39,6 +39,7 @@ class SearchStatsTopologyTest {
                 "search-stats-test",
                 "search-counts-test",
                 "search-stats-app-test",
+                "earliest",
                 "kafka-test:9092"
         );
 
@@ -56,6 +57,7 @@ class SearchStatsTopologyTest {
                 "search-stats-test",
                 "search-counts-test",
                 "search-stats-app-test",
+                "earliest",
                 "kafka-test:9092"
         );
         StreamsBuilder builder = new StreamsBuilder();
@@ -76,6 +78,7 @@ class SearchStatsTopologyTest {
                 "search-stats-test",
                 "search-counts-test",
                 "search-stats-app-test",
+                "earliest",
                 "kafka-test:9092"
         );
         when(repository.findById(anyString())).thenReturn(Optional.empty());
@@ -115,6 +118,7 @@ class SearchStatsTopologyTest {
                     "search-stats-test",
                     "search-counts-test",
                     "search-stats-app-test",
+                    "earliest",
                     "kafka-test:9092"
             );
             when(repository.findById(anyString())).thenReturn(Optional.empty());
@@ -152,6 +156,7 @@ class SearchStatsTopologyTest {
                 "search-stats-test",
                 "search-counts-test",
                 "search-stats-app-test",
+                "earliest",
                 "kafka-test:9092"
         );
 

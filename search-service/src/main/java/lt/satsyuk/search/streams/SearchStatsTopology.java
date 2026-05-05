@@ -4,6 +4,7 @@ import lt.satsyuk.common.kafka.KafkaTopics;
 import lt.satsyuk.search.model.SearchStat;
 import lt.satsyuk.search.model.SearchStatRepository;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.*;
@@ -21,6 +22,7 @@ public class SearchStatsTopology {
     private final String searchStatsTopic;
     private final String stateStoreName;
     private final String streamsApplicationId;
+    private final String autoOffsetReset;
     private final String bootstrapServers;
 
     public SearchStatsTopology(
@@ -29,6 +31,7 @@ public class SearchStatsTopology {
             @Value("${search.topics.stats:" + KafkaTopics.SEARCH_STATS + "}") String searchStatsTopic,
             @Value("${search.streams.state-store:search-counts-v2}") String stateStoreName,
             @Value("${search.streams.application-id:" + KafkaTopics.SEARCH_STATS + "-app-v2}") String streamsApplicationId,
+            @Value("${search.streams.auto-offset-reset:earliest}") String autoOffsetReset,
             @Value("${spring.kafka.bootstrap-servers:kafka:9092}") String bootstrapServers
     ) {
         this.repository = repository;
@@ -36,6 +39,7 @@ public class SearchStatsTopology {
         this.searchStatsTopic = searchStatsTopic;
         this.stateStoreName = stateStoreName;
         this.streamsApplicationId = streamsApplicationId;
+        this.autoOffsetReset = autoOffsetReset;
         this.bootstrapServers = bootstrapServers;
     }
 
@@ -63,6 +67,7 @@ public class SearchStatsTopology {
     public Properties streamsConfig() {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, streamsApplicationId);
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset);
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);

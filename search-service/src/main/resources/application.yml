@@ -52,6 +52,7 @@ search:
   streams:
     # Bump application id together with state store to avoid resuming old committed offsets.
     application-id: ${SEARCH_STREAMS_APPLICATION_ID:${SPRING_KAFKA_STREAMS_APPLICATION_ID:search-stats-app-v2}}
+    auto-offset-reset: ${SEARCH_STREAMS_AUTO_OFFSET_RESET:earliest}
     # Bump store name so normalized keys do not reuse pre-migration local state.
     state-store: ${SEARCH_STREAMS_STATE_STORE:search-counts-v2}
 
