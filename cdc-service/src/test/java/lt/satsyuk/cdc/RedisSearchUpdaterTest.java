@@ -13,6 +13,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Flux;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -72,6 +73,18 @@ class RedisSearchUpdaterTest {
 
         verify(redis).scan(ArgumentMatchers.any(ScanOptions.class));
         verify(redis).delete(ArgumentMatchers.any(org.reactivestreams.Publisher.class));
+    }
+
+    @Test
+    void clearIndexPropagatesRedisErrors() {
+        when(redis.scan(ArgumentMatchers.any(ScanOptions.class)))
+                .thenReturn(Flux.just("autocomplete:ja"));
+        when(redis.delete(ArgumentMatchers.any(org.reactivestreams.Publisher.class)))
+                .thenReturn(Mono.error(new IllegalStateException("delete failed")));
+
+        assertThatThrownBy(() -> updater.clearIndex())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("delete failed");
     }
 }
 

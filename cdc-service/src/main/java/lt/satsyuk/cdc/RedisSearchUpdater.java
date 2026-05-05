@@ -8,10 +8,11 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
 
 import java.util.Locale;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 public class RedisSearchUpdater {
@@ -20,6 +21,10 @@ public class RedisSearchUpdater {
 
     private final ReactiveStringRedisTemplate redis;
     private final String redisPrefix;
+    private final ReentrantLock clearLock = new ReentrantLock();
+    private final Condition clearCondition = clearLock.newCondition();
+    private int inFlightUpdates;
+    private boolean clearInProgress;
 
     public RedisSearchUpdater(
             ReactiveStringRedisTemplate redis,
@@ -39,22 +44,30 @@ public class RedisSearchUpdater {
             return;
         }
         log.debug("Updating Redis index for query='{}', count={}", normalized, count);
-
-        Flux.range(1, normalized.length())
-                .map(i -> normalized.substring(0, i))
-                .flatMap(prefix -> {
-                    String key = redisPrefix + prefix;
-                    return redis.opsForZSet()
-                            .add(key, normalized, count)
-                            .then();
-                })
-                .then()
-                .doOnSuccess(ignored -> log.debug("Redis index updated for '{}'", normalized))
-                .onErrorResume(ex -> {
-                    log.error("Failed to update Redis index", ex);
-                    return Mono.empty();
-                })
-                .block();
+        beginUpdate();
+        try {
+            Flux.range(1, normalized.length())
+                    .map(i -> normalized.substring(0, i))
+                    .flatMap(prefix -> {
+                        String key = redisPrefix + prefix;
+                        return redis.opsForZSet()
+                                .add(key, normalized, count)
+                                .then();
+                    })
+                    .then()
+                    .doOnSuccess(ignored -> log.debug("Redis index updated for '{}'", normalized))
+                    .doOnError(ex -> log.error("Failed to update Redis index", ex))
+                    .doFinally(signalType -> finishUpdate())
+                    .subscribe(
+                            ignored -> {
+                            },
+                            ignored -> {
+                            }
+                    );
+        } catch (RuntimeException ex) {
+            finishUpdate();
+            log.error("Failed to schedule Redis index update", ex);
+        }
     }
 
     /**
@@ -69,12 +82,60 @@ public class RedisSearchUpdater {
      */
     public void clearIndex() {
         String pattern = redisPrefix + "*";
-        redis.delete(redis.scan(ScanOptions.scanOptions().match(pattern).count(100).build()))
-                .onErrorResume(ex -> {
-                    log.error("Failed to clear Redis index", ex);
-                    return Mono.just(0L);
-                })
-                .doOnSuccess(count -> log.debug("Redis index cleared {} key(s) for pattern '{}'", count, pattern))
-                .block();
+        waitForInFlightUpdates();
+        try {
+            redis.delete(redis.scan(ScanOptions.scanOptions().match(pattern).count(100).build()))
+                    .doOnSuccess(count -> log.debug("Redis index cleared {} key(s) for pattern '{}'", count, pattern))
+                    .block();
+        } finally {
+            finishClear();
+        }
+    }
+
+    private void beginUpdate() {
+        clearLock.lock();
+        try {
+            while (clearInProgress) {
+                clearCondition.awaitUninterruptibly();
+            }
+            inFlightUpdates++;
+        } finally {
+            clearLock.unlock();
+        }
+    }
+
+    private void finishUpdate() {
+        clearLock.lock();
+        try {
+            inFlightUpdates--;
+            if (inFlightUpdates == 0) {
+                clearCondition.signalAll();
+            }
+        } finally {
+            clearLock.unlock();
+        }
+    }
+
+    private void waitForInFlightUpdates() {
+        clearLock.lock();
+        try {
+            clearInProgress = true;
+            while (inFlightUpdates > 0) {
+                clearCondition.awaitUninterruptibly();
+            }
+        } finally {
+            clearLock.unlock();
+        }
+    }
+
+    private void finishClear() {
+        clearLock.lock();
+        try {
+            clearInProgress = false;
+            clearCondition.signalAll();
+        } finally {
+            clearLock.unlock();
+        }
     }
 }
+
