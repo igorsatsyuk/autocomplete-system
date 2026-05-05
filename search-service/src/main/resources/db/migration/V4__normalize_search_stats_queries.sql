@@ -3,12 +3,15 @@
 -- Operational notes:
 --   1. The TRUNCATE below fires a Debezium event with op="t"; the CDC service
 --      calls RedisSearchUpdater.clearIndex() which now BLOCKS the Kafka consumer
---      thread until all autocomplete:* keys are deleted from Redis.  Subsequent
+--      thread until all keys matching the configured autocomplete Redis prefix
+--      are deleted. Subsequent
 --      INSERT events then rebuild the index so there is no ZSet entry race.
 --   2. Autocomplete responses will be empty from the moment of TRUNCATE until
 --      CDC has processed all re-inserted rows.  Plan accordingly for large tables.
---   3. The Kafka Streams state store is versioned (search-counts-v2) to avoid
---      stale trim-inconsistent state being carried across this migration.
+--   3. The default Kafka Streams state store is versioned (search-counts-v2) to
+--      avoid stale trim-inconsistent state being carried across this migration.
+--      If SEARCH_STREAMS_STATE_STORE/search.streams.state-store is overridden,
+--      use a fresh store name during rollout.
 --
 -- SQL lower() depends on DB collation and can diverge from Java Locale.ROOT
 -- for non-ASCII text (for example Turkish locale rules). To avoid rewriting
