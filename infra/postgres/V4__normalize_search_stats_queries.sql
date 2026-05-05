@@ -23,6 +23,21 @@
 --   3. Drop rows that are effectively blank under Java isBlank() semantics
 --      (including Unicode space separators like U+2003 EM SPACE)
 
+-- Ensure the collation name exists across environments:
+-- prefer ICU root collation; if ICU is unavailable, create a libc C fallback
+-- with the same name so the migration remains executable.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_collation WHERE collname = 'und-x-icu') THEN
+        BEGIN
+            EXECUTE 'CREATE COLLATION "und-x-icu" (provider = icu, locale = ''und'', deterministic = false)';
+        EXCEPTION
+            WHEN undefined_object OR feature_not_supported THEN
+                EXECUTE 'CREATE COLLATION "und-x-icu" (provider = libc, locale = ''C'', deterministic = true)';
+        END;
+    END IF;
+END$$;
+
 CREATE TEMP TABLE tmp_search_stats_normalized AS
 WITH normalized AS (
     SELECT
