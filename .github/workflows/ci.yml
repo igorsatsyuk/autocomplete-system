@@ -352,7 +352,7 @@ jobs:
     needs: [frontend]
     permissions:
       contents: read
-      actions: write
+      actions: read
     if: >
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'pull_request' && github.actor != 'dependabot[bot]')

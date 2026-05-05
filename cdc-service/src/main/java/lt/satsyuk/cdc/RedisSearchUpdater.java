@@ -24,6 +24,7 @@ public class RedisSearchUpdater {
     private final ReentrantLock clearLock = new ReentrantLock();
     private final Condition clearCondition = clearLock.newCondition();
     private int inFlightUpdates;
+    private int pendingClears;
     private boolean clearInProgress;
 
     public RedisSearchUpdater(
@@ -82,7 +83,7 @@ public class RedisSearchUpdater {
      */
     public void clearIndex() {
         String pattern = redisPrefix + "*";
-        waitForInFlightUpdates();
+        beginClear();
         try {
             redis.delete(redis.scan(ScanOptions.scanOptions().match(pattern).count(100).build()))
                     .doOnSuccess(count -> log.debug("Redis index cleared {} key(s) for pattern '{}'", count, pattern))
@@ -95,7 +96,7 @@ public class RedisSearchUpdater {
     private void beginUpdate() {
         clearLock.lock();
         try {
-            while (clearInProgress) {
+            while (clearInProgress || pendingClears > 0) {
                 clearCondition.awaitUninterruptibly();
             }
             inFlightUpdates++;
@@ -116,13 +117,15 @@ public class RedisSearchUpdater {
         }
     }
 
-    private void waitForInFlightUpdates() {
+    private void beginClear() {
         clearLock.lock();
         try {
-            clearInProgress = true;
-            while (inFlightUpdates > 0) {
+            pendingClears++;
+            while (clearInProgress || inFlightUpdates > 0) {
                 clearCondition.awaitUninterruptibly();
             }
+            pendingClears--;
+            clearInProgress = true;
         } finally {
             clearLock.unlock();
         }

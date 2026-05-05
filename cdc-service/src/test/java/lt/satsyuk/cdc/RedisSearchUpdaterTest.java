@@ -15,6 +15,7 @@ import reactor.core.publisher.Flux;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,6 +25,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class RedisSearchUpdaterTest {
@@ -154,6 +156,57 @@ class RedisSearchUpdaterTest {
 
         verify(zSetOperations, atLeastOnce())
                 .add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("java"), ArgumentMatchers.eq(5.0));
+    }
+
+    @Test
+    void serializesOverlappingClearsAndKeepsUpdatesBlockedUntilBothFinish() {
+        CountDownLatch firstDeleteStarted = new CountDownLatch(1);
+        CountDownLatch releaseFirstDelete = new CountDownLatch(1);
+        CountDownLatch secondDeleteStarted = new CountDownLatch(1);
+        CountDownLatch releaseSecondDelete = new CountDownLatch(1);
+        AtomicInteger deleteInvocations = new AtomicInteger(0);
+        AtomicBoolean updateReachedRedisAfterSecondClear = new AtomicBoolean(false);
+        CountDownLatch updateReachedRedis = new CountDownLatch(1);
+
+        when(redis.scan(ArgumentMatchers.any(ScanOptions.class)))
+                .thenReturn(Flux.just("autocomplete:ja"));
+        when(redis.delete(ArgumentMatchers.any(org.reactivestreams.Publisher.class)))
+                .thenAnswer(invocation -> Mono.fromRunnable(() -> {
+                    int call = deleteInvocations.incrementAndGet();
+                    if (call == 1) {
+                        firstDeleteStarted.countDown();
+                        await().atMost(Duration.ofSeconds(2)).until(() -> releaseFirstDelete.getCount() == 0);
+                    } else {
+                        secondDeleteStarted.countDown();
+                        await().atMost(Duration.ofSeconds(2)).until(() -> releaseSecondDelete.getCount() == 0);
+                    }
+                }).thenReturn(1L));
+
+        when(redis.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("late"), ArgumentMatchers.eq(1.0)))
+                .thenAnswer(invocation -> Mono.fromRunnable(() -> {
+                    updateReachedRedisAfterSecondClear.set(secondDeleteStarted.getCount() == 0 && releaseSecondDelete.getCount() == 0);
+                    updateReachedRedis.countDown();
+                }).thenReturn(Boolean.TRUE));
+
+        Thread clearOne = new Thread(() -> updater.clearIndex());
+        clearOne.start();
+        await().atMost(Duration.ofSeconds(2)).until(() -> firstDeleteStarted.getCount() == 0);
+
+        Thread clearTwo = new Thread(() -> updater.clearIndex());
+        clearTwo.start();
+
+        Thread blockedUpdate = new Thread(() -> updater.updateQueryScore("late", 1L));
+        blockedUpdate.start();
+
+        releaseFirstDelete.countDown();
+        await().atMost(Duration.ofSeconds(2)).until(() -> secondDeleteStarted.getCount() == 0);
+        releaseSecondDelete.countDown();
+
+        await().atMost(Duration.ofSeconds(2)).until(() -> updateReachedRedis.getCount() == 0);
+
+        assertThat(updateReachedRedisAfterSecondClear.get()).isTrue();
+        verify(redis, times(2)).delete(ArgumentMatchers.any(org.reactivestreams.Publisher.class));
     }
 }
 

@@ -18,7 +18,8 @@
 -- Normalize historical rows using the same high-level contract as runtime:
 -- trim first, then lowercase, then drop effectively blank keys.
 --   1. Trim all queries (Java String.trim() compat: [\u0000-\u0020])
---   2. Lowercase all trimmed values so historical keys converge with runtime
+--   2. Lowercase all trimmed values with deterministic C collation so
+--      DB locale does not change normalization behavior across environments
 --   3. Drop rows that are effectively blank under Java isBlank() semantics
 --      (including Unicode space separators like U+2003 EM SPACE)
 
@@ -33,7 +34,7 @@ WITH normalized AS (
     WHERE query IS NOT NULL
 ), collapsed AS (
     SELECT
-        lower(trimmed_query) AS query,
+        pg_catalog.lower(trimmed_query COLLATE "C") AS query,
         frequency,
         updated_at
     FROM normalized
