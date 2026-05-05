@@ -18,8 +18,8 @@
 -- Normalize historical rows using the same high-level contract as runtime:
 -- trim first, then lowercase, then drop effectively blank keys.
 --   1. Trim all queries (Java String.trim() compat: [\u0000-\u0020])
---   2. Lowercase all trimmed values with deterministic C collation so
---      DB locale does not change normalization behavior across environments
+--   2. Lowercase ASCII letters only (A-Z -> a-z), matching runtime
+--      deterministic normalization and avoiding locale-sensitive divergence
 --   3. Drop rows that are effectively blank under Java isBlank() semantics
 --      (including Unicode space separators like U+2003 EM SPACE)
 
@@ -34,7 +34,7 @@ WITH normalized AS (
     WHERE query IS NOT NULL
 ), collapsed AS (
     SELECT
-        pg_catalog.lower(trimmed_query COLLATE "C") AS query,
+        translate(trimmed_query, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') AS query,
         frequency,
         updated_at
     FROM normalized
@@ -48,7 +48,9 @@ WHERE query <> ''
   AND regexp_replace(
       query,
       '['
-      || chr(9) || chr(10) || chr(11) || chr(12) || chr(13) || chr(32)
+      || chr(9) || chr(10) || chr(11) || chr(12) || chr(13)
+      || chr(28) || chr(29) || chr(30) || chr(31)
+      || chr(32)
       || chr(133) || chr(5760)
       || chr(8192) || chr(8193) || chr(8194) || chr(8195) || chr(8196)
       || chr(8197) || chr(8198) || chr(8200) || chr(8201)

@@ -10,7 +10,6 @@ import org.apache.kafka.streams.kstream.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.util.Locale;
 import java.util.Properties;
 
 @Component
@@ -44,7 +43,7 @@ public class SearchStatsTopology {
                 Consumed.with(Serdes.String(), Serdes.String()));
 
         KTable<String, Long> counts = events
-                .mapValues(value -> value == null ? null : value.trim().toLowerCase(Locale.ROOT))
+                .mapValues(value -> normalizeQuery(value))
                 .filter((ignoredKey, value) -> value != null && !value.isBlank())
                 .selectKey((ignoredKey, value) -> value)
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
@@ -67,5 +66,23 @@ public class SearchStatsTopology {
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         return props;
+    }
+
+    private static String normalizeQuery(String raw) {
+        if (raw == null) {
+            return null;
+        }
+
+        String trimmed = raw.trim();
+        StringBuilder normalized = new StringBuilder(trimmed.length());
+        for (int i = 0; i < trimmed.length(); i++) {
+            char current = trimmed.charAt(i);
+            if (current >= 'A' && current <= 'Z') {
+                normalized.append((char) (current + ('a' - 'A')));
+            } else {
+                normalized.append(current);
+            }
+        }
+        return normalized.toString();
     }
 }

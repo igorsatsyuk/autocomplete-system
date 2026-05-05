@@ -9,8 +9,6 @@ import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
-
-import java.util.Locale;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -40,7 +38,7 @@ public class RedisSearchUpdater {
             return;
         }
 
-        String normalized = query.trim().toLowerCase(Locale.ROOT);
+        String normalized = normalizeQuery(query);
         if (normalized.isBlank()) {
             return;
         }
@@ -139,6 +137,20 @@ public class RedisSearchUpdater {
         } finally {
             clearLock.unlock();
         }
+    }
+
+    private static String normalizeQuery(String raw) {
+        String trimmed = raw.trim();
+        StringBuilder normalized = new StringBuilder(trimmed.length());
+        for (int i = 0; i < trimmed.length(); i++) {
+            char current = trimmed.charAt(i);
+            if (current >= 'A' && current <= 'Z') {
+                normalized.append((char) (current + ('a' - 'A')));
+            } else {
+                normalized.append(current);
+            }
+        }
+        return normalized.toString();
     }
 }
 

@@ -53,6 +53,8 @@ class SearchServiceKafkaIT {
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         registry.add("spring.kafka.streams.bootstrap-servers", kafka::getBootstrapServers);
+
+        createTopicsBeforeStartup(KafkaTopics.SEARCH_EVENTS, KafkaTopics.SEARCH_STATS);
     }
 
     @LocalServerPort
@@ -60,8 +62,6 @@ class SearchServiceKafkaIT {
 
     @Test
     void searchEndpointPublishesEventToKafkaTopic() throws Exception {
-        createTopicsIfMissing(KafkaTopics.SEARCH_EVENTS);
-
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/search?q=java"))
                 .GET()
@@ -108,6 +108,14 @@ class SearchServiceKafkaIT {
             if (!newTopics.isEmpty()) {
                 adminClient.createTopics(newTopics).all().get();
             }
+        }
+    }
+
+    private static void createTopicsBeforeStartup(String... topicNames) {
+        try {
+            createTopicsIfMissing(topicNames);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to create Kafka topics for integration test startup", ex);
         }
     }
 }

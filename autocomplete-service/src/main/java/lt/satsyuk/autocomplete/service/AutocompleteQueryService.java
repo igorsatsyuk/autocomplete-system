@@ -8,8 +8,6 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
-import java.util.Locale;
-
 @Service
 public class AutocompleteQueryService {
 
@@ -29,7 +27,7 @@ public class AutocompleteQueryService {
             return Flux.empty();
         }
 
-        String normalizedPrefix = prefix.trim().toLowerCase(Locale.ROOT);
+        String normalizedPrefix = normalizePrefix(prefix);
         if (normalizedPrefix.isBlank()) {
             return Flux.empty();
         }
@@ -42,5 +40,19 @@ public class AutocompleteQueryService {
         return redisTemplate.opsForZSet()
                 .reverseRange(redisPrefix + normalizedPrefix, range)
                 .map(q -> new AutocompleteEntry(q, 0.0));
+    }
+
+    private static String normalizePrefix(String raw) {
+        String trimmed = raw.trim();
+        StringBuilder normalized = new StringBuilder(trimmed.length());
+        for (int i = 0; i < trimmed.length(); i++) {
+            char current = trimmed.charAt(i);
+            if (current >= 'A' && current <= 'Z') {
+                normalized.append((char) (current + ('a' - 'A')));
+            } else {
+                normalized.append(current);
+            }
+        }
+        return normalized.toString();
     }
 }
