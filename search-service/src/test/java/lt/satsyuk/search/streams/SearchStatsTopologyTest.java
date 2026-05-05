@@ -107,7 +107,7 @@ class SearchStatsTopologyTest {
     @Test
     void usesLocaleRootForNormalization() {
         Locale previousDefault = Locale.getDefault();
-        Locale.setDefault(new Locale("tr", "TR"));
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
         try {
             SearchStatsTopology topology = new SearchStatsTopology(
                     repository,

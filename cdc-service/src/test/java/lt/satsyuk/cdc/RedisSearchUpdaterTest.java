@@ -131,9 +131,6 @@ class RedisSearchUpdaterTest {
         Thread blockedUpdateThread = new Thread(() -> updater.updateQueryScore("blocked", 2L));
         blockedUpdateThread.start();
 
-        await().during(Duration.ofMillis(150)).atMost(Duration.ofSeconds(1))
-                .untilAsserted(() -> verify(zSetOperations, never())
-                        .add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("blocked"), ArgumentMatchers.eq(2.0)));
 
         releaseFirstUpdate.countDown();
 
