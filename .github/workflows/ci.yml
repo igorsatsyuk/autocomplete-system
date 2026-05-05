@@ -186,7 +186,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm ci --ignore-scripts
+        run: npm ci
 
       - name: Lint
         working-directory: frontend
@@ -371,7 +371,7 @@ jobs:
       - name: Install frontend dependencies
         if: ${{ env.SONAR_TOKEN != '' }}
         working-directory: frontend
-        run: npm ci --ignore-scripts
+        run: npm ci
 
       - name: SonarQube skipped (missing token)
         if: ${{ env.SONAR_TOKEN == '' }}
