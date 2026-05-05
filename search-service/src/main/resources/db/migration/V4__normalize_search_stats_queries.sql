@@ -11,8 +11,11 @@
 --      stale trim-inconsistent state being carried across this migration.
 --
 -- SQL lower() depends on DB collation and can diverge from Java Locale.ROOT for
--- non-ASCII text. Apply lower() only to ASCII-safe values to avoid locale-driven
--- rewrites; non-ASCII values are trim-normalized only.
+-- non-ASCII text, especially in locales like Turkish. As best-effort for consistency:
+--   1. Trim all queries (Java String.trim() compat: [\u0000-\u0020])
+--   2. Apply lower() to normalize case, accepting a small locale-driven drift
+--      for rare non-ASCII cases vs. Java Locale.ROOT
+--   3. Group/aggregate by lowercase query to merge split counters
 
 CREATE TEMP TABLE tmp_search_stats_normalized AS
 WITH normalized AS (
@@ -23,20 +26,14 @@ WITH normalized AS (
         updated_at
     FROM search_stats
     WHERE query IS NOT NULL
-), collapsed AS (
-    SELECT
-        CASE WHEN trimmed_query ~ '^[\\000-\\177]*$' THEN lower(trimmed_query) ELSE trimmed_query END AS query,
-        frequency,
-        updated_at
-    FROM normalized
 )
 SELECT
-    query,
+    lower(trimmed_query) AS query,
     SUM(frequency) AS frequency,
     MAX(updated_at) AS updated_at
-FROM collapsed
-WHERE query <> ''
-GROUP BY query;
+FROM normalized
+WHERE trimmed_query <> ''
+GROUP BY lower(trimmed_query);
 
 TRUNCATE TABLE search_stats;
 
