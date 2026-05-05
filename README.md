@@ -52,7 +52,7 @@ flowchart LR
 
 Core behavior:
 
-- `SearchStatsTopology` lowercases queries, aggregates into state store `search-counts-v2` (default; overridable via `SEARCH_STREAMS_STATE_STORE` / `search.streams.state-store`), persists to `search_stats`, emits `search-stats`.
+- `SearchStatsTopology` trims and lowercases queries, aggregates into state store `search-counts-v2` (default; overridable via `SEARCH_STREAMS_STATE_STORE` / `search.streams.state-store`), persists to `search_stats`, emits `search-stats`.
 - `DebeziumConsumer` parses envelope format and reads `payload.after`.
 - `RedisSearchUpdater` writes one sorted-set entry per prefix (for `java`: `j`, `ja`, `jav`, `java`).
 - `AutocompleteQueryService` returns empty result for blank `q` or non-positive `limit`.
