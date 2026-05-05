@@ -8,7 +8,6 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
-import java.util.Locale;
 
 @Service
 public class AutocompleteQueryService {
@@ -45,7 +44,13 @@ public class AutocompleteQueryService {
     }
 
     private static String normalizePrefix(String raw) {
-        return raw.trim().toLowerCase(Locale.ROOT);
+        String trimmed = raw.trim();
+        StringBuilder sb = new StringBuilder(trimmed.length());
+        for (int i = 0; i < trimmed.length(); i++) {
+            char c = trimmed.charAt(i);
+            sb.append(c >= 'A' && c <= 'Z' ? (char) (c + ('a' - 'A')) : c);
+        }
+        return sb.toString();
     }
 }
 
