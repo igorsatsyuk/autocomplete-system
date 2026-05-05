@@ -19,6 +19,8 @@
 --   1. Trim all queries (Java String.trim() compat: [\u0000-\u0020])
 --   2. Apply lower() only to ASCII-safe values
 --   3. Keep non-ASCII values trim-normalized only (no locale-sensitive rewrite)
+--   4. Drop rows that are effectively blank under Java isBlank() semantics
+--      (including Unicode space separators like U+2003 EM SPACE)
 
 CREATE TEMP TABLE tmp_search_stats_normalized AS
 WITH normalized AS (
@@ -42,6 +44,19 @@ SELECT
     MAX(updated_at) AS updated_at
 FROM collapsed
 WHERE query <> ''
+  AND regexp_replace(
+      query,
+      '['
+      || chr(9) || chr(10) || chr(11) || chr(12) || chr(13) || chr(32)
+      || chr(133) || chr(160) || chr(5760)
+      || chr(8192) || chr(8193) || chr(8194) || chr(8195) || chr(8196)
+      || chr(8197) || chr(8198) || chr(8199) || chr(8200) || chr(8201)
+      || chr(8202) || chr(8232) || chr(8233) || chr(8239) || chr(8287)
+      || chr(12288)
+      || ']',
+      '',
+      'g'
+  ) <> ''
 GROUP BY query;
 
 TRUNCATE TABLE search_stats;
