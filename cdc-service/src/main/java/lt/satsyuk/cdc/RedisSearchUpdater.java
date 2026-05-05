@@ -6,14 +6,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.ScanOptions;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 
 import java.util.Locale;
-import java.util.Collections;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -21,14 +18,6 @@ import java.util.concurrent.locks.ReentrantLock;
 public class RedisSearchUpdater {
 
     private static final Logger log = LoggerFactory.getLogger(RedisSearchUpdater.class);
-    private static final RedisScript<Long> UPSERT_MAX_SCORE_SCRIPT = new DefaultRedisScript<>(
-            "local current = redis.call('ZSCORE', KEYS[1], ARGV[1]) " +
-                    "if (not current) or (tonumber(ARGV[2]) >= tonumber(current)) then " +
-                    "  return redis.call('ZADD', KEYS[1], ARGV[2], ARGV[1]) " +
-                    "end " +
-                    "return 0",
-            Long.class
-    );
 
     private final ReactiveStringRedisTemplate redis;
     private final String redisPrefix;
@@ -61,12 +50,8 @@ public class RedisSearchUpdater {
                     .map(i -> normalized.substring(0, i))
                     .flatMap(prefix -> {
                         String key = redisPrefix + prefix;
-                            return redis.execute(
-                                            UPSERT_MAX_SCORE_SCRIPT,
-                                            Collections.singletonList(key),
-                                            normalized,
-                                            String.valueOf(count)
-                                    )
+                            return redis.opsForZSet()
+                                    .add(key, normalized, count)
                                     .then();
                     })
                     .then()
