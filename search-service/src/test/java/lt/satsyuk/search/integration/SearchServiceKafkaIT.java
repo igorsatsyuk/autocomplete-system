@@ -1,15 +1,17 @@
 package lt.satsyuk.search.integration;
 
 import lt.satsyuk.common.kafka.KafkaTopics;
-import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Bean;
+import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.KafkaContainer;
@@ -23,12 +25,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -60,8 +58,6 @@ class SearchServiceKafkaIT {
 
     @Test
     void searchEndpointPublishesEventToKafkaTopic() throws Exception {
-        createTopicsBeforeStartup(KafkaTopics.SEARCH_EVENTS, KafkaTopics.SEARCH_STATS);
-
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/search?q=java"))
                 .GET()
@@ -94,28 +90,16 @@ class SearchServiceKafkaIT {
         }
     }
 
-    private static void createTopicsIfMissing(String... topicNames) throws Exception {
-        Map<String, Object> configs = Map.of(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
-        try (AdminClient adminClient = AdminClient.create(configs)) {
-            Set<String> existingTopics = adminClient.listTopics().names().get();
-            List<NewTopic> newTopics = new ArrayList<>();
-            for (String topicName : topicNames) {
-                if (!existingTopics.contains(topicName)) {
-                    newTopics.add(new NewTopic(topicName, 1, (short) 1));
-                }
-            }
-
-            if (!newTopics.isEmpty()) {
-                adminClient.createTopics(newTopics).all().get();
-            }
+    @TestConfiguration
+    static class KafkaTopicsConfig {
+        @Bean
+        NewTopic searchEventsTopic() {
+            return TopicBuilder.name(KafkaTopics.SEARCH_EVENTS).partitions(1).replicas(1).build();
         }
-    }
 
-    private static void createTopicsBeforeStartup(String... topicNames) {
-        try {
-            createTopicsIfMissing(topicNames);
-        } catch (Exception ex) {
-            throw new IllegalStateException("Failed to create Kafka topics for integration test startup", ex);
+        @Bean
+        NewTopic searchStatsTopic() {
+            return TopicBuilder.name(KafkaTopics.SEARCH_STATS).partitions(1).replicas(1).build();
         }
     }
 }
