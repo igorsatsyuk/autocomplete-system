@@ -12,8 +12,14 @@ import org.springframework.data.redis.core.ScanOptions;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Flux;
 
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -85,6 +91,59 @@ class RedisSearchUpdaterTest {
         assertThatThrownBy(() -> updater.clearIndex())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("delete failed");
+    }
+
+    @Test
+    void clearIndexWaitsForInFlightUpdateAndBlocksNewUpdates() {
+        CountDownLatch firstUpdateStarted = new CountDownLatch(1);
+        CountDownLatch releaseFirstUpdate = new CountDownLatch(1);
+        CountDownLatch clearFinished = new CountDownLatch(1);
+        CountDownLatch secondUpdateReachedRedis = new CountDownLatch(1);
+        AtomicBoolean clearCompletedBeforeSecondUpdate = new AtomicBoolean(false);
+
+        when(redis.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("java"), ArgumentMatchers.eq(1.0)))
+                .thenAnswer(invocation -> Mono.fromRunnable(() -> {
+                    firstUpdateStarted.countDown();
+                    await().atMost(Duration.ofSeconds(2)).until(() -> releaseFirstUpdate.getCount() == 0);
+                }).thenReturn(Boolean.TRUE));
+        when(zSetOperations.add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("blocked"), ArgumentMatchers.eq(2.0)))
+                .thenAnswer(invocation -> Mono.fromRunnable(() -> {
+                    clearCompletedBeforeSecondUpdate.set(clearFinished.getCount() == 0);
+                    secondUpdateReachedRedis.countDown();
+                }).thenReturn(Boolean.TRUE));
+
+        when(redis.scan(ArgumentMatchers.any(ScanOptions.class)))
+                .thenReturn(Flux.just("autocomplete:ja"));
+        when(redis.delete(ArgumentMatchers.any(org.reactivestreams.Publisher.class)))
+                .thenReturn(Mono.just(1L));
+
+        Thread firstUpdateThread = new Thread(() -> updater.updateQueryScore("java", 1L));
+        firstUpdateThread.start();
+        await().atMost(Duration.ofSeconds(2)).until(() -> firstUpdateStarted.getCount() == 0);
+
+        Thread clearThread = new Thread(() -> {
+            updater.clearIndex();
+            clearFinished.countDown();
+        });
+        clearThread.start();
+
+        Thread blockedUpdateThread = new Thread(() -> updater.updateQueryScore("blocked", 2L));
+        blockedUpdateThread.start();
+
+        await().during(Duration.ofMillis(150)).atMost(Duration.ofSeconds(1))
+                .untilAsserted(() -> verify(zSetOperations, never())
+                        .add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("blocked"), ArgumentMatchers.eq(2.0)));
+
+        releaseFirstUpdate.countDown();
+
+        await().atMost(Duration.ofSeconds(2)).until(() -> clearFinished.getCount() == 0);
+        await().atMost(Duration.ofSeconds(2)).until(() -> secondUpdateReachedRedis.getCount() == 0);
+
+        assertThat(clearCompletedBeforeSecondUpdate.get()).isTrue();
+        verify(redis).delete(ArgumentMatchers.any(org.reactivestreams.Publisher.class));
+        verify(zSetOperations, atLeastOnce())
+                .add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("blocked"), ArgumentMatchers.eq(2.0));
     }
 }
 
