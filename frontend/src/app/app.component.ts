@@ -25,7 +25,7 @@ export class AppComponent implements OnInit {
 
   onInputChange(value: string) {
     this.query = value;
-    this.showSuggestions = !!value;
+    this.showSuggestions = value.trim().length > 0;
     this.autocomplete.nextQuery(value);
   }
 

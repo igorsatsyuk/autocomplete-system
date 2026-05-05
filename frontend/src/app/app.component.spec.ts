@@ -50,6 +50,12 @@ describe('AppComponent', () => {
       component.onInputChange('');
       expect(component.showSuggestions).toBeFalse();
     });
+
+    it('sets showSuggestions=false for whitespace-only input', () => {
+      component.onInputChange('   ');
+      expect(component.showSuggestions).toBeFalse();
+      expect(serviceSpy.nextQuery).toHaveBeenCalledWith('   ');
+    });
   });
 
   describe('onSelectSuggestion()', () => {

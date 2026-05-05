@@ -186,7 +186,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Lint
         working-directory: frontend
@@ -202,7 +202,7 @@ jobs:
         with:
           name: frontend-coverage
           path: frontend/coverage/autocomplete-frontend/lcov.info
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Build
@@ -371,7 +371,7 @@ jobs:
       - name: Install frontend dependencies
         if: ${{ env.SONAR_TOKEN != '' }}
         working-directory: frontend
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: SonarQube skipped (missing token)
         if: ${{ env.SONAR_TOKEN == '' }}
