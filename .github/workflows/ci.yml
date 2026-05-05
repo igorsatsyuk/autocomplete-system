@@ -382,14 +382,14 @@ jobs:
         run: echo "SONAR_TOKEN is not set. Skipping SonarQube analysis."
 
       - name: Download frontend coverage report
-        if: ${{ env.SONAR_TOKEN != '' }}
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: frontend-coverage
           path: frontend/coverage
 
       - name: Ensure lcov.info is at expected path
-        if: ${{ env.SONAR_TOKEN != '' }}
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
         shell: bash
         run: |
           expected="frontend/coverage/autocomplete-frontend/lcov.info"
