@@ -1,8 +1,5 @@
 name: CI
 
-env:
-  BACKEND_SERVICES_JSON: '["autocomplete-service","search-service","cdc-service"]'
-
 on:
   push:
     branches: [ main ]
@@ -55,7 +52,7 @@ jobs:
 
     strategy:
       matrix:
-        service: ${{ fromJson(env.BACKEND_SERVICES_JSON) }}
+        service: [autocomplete-service, search-service, cdc-service]
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -118,7 +115,7 @@ jobs:
 
     strategy:
       matrix:
-        service: ${{ fromJson(env.BACKEND_SERVICES_JSON) }}
+        service: [autocomplete-service, search-service, cdc-service]
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -228,7 +225,7 @@ jobs:
 
     strategy:
       matrix:
-        service: ${{ fromJson(env.BACKEND_SERVICES_JSON) }}
+        service: [autocomplete-service, search-service, cdc-service]
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -497,7 +494,6 @@ jobs:
           import xml.etree.ElementTree as ET
           from pathlib import Path
 
-          services = json.loads(os.environ.get("BACKEND_SERVICES_JSON", "[]"))
           unit_root = Path("test-reports/unit")
           integration_root = Path("test-reports/integration")
 
@@ -525,17 +521,14 @@ jobs:
 
             return totals
 
-          def get_sonar_statuses():
-            statuses = {service: "unknown" for service in services}
-            statuses["frontend"] = "unknown"
-
+          def fetch_run_jobs():
             token = os.environ.get("GH_TOKEN", "")
             repo = os.environ.get("GITHUB_REPOSITORY", "")
             run_id = os.environ.get("GITHUB_RUN_ID", "")
             api_url = f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/jobs?per_page=100"
 
             if not token or not repo or not run_id:
-              return statuses
+              return []
 
             req = urllib.request.Request(
               api_url,
@@ -550,9 +543,35 @@ jobs:
               with urllib.request.urlopen(req, timeout=20) as resp:
                 payload = json.loads(resp.read().decode("utf-8"))
             except Exception:
-              return statuses
+              return []
 
-            for job in payload.get("jobs", []):
+            return payload.get("jobs", [])
+
+          def discover_services(run_jobs):
+            services = set()
+
+            for root, prefix in ((unit_root, "unit-test-reports-"), (integration_root, "integration-test-reports-")):
+              if not root.exists():
+                continue
+              for artifact_dir in root.iterdir():
+                if artifact_dir.is_dir() and artifact_dir.name.startswith(prefix):
+                  services.add(artifact_dir.name[len(prefix):])
+
+            for job in run_jobs:
+              name = job.get("name", "")
+              for prefix in ("Unit - ", "Integration - ", "SonarQube - "):
+                if name.startswith(prefix):
+                  service = name[len(prefix):]
+                  if service != "frontend":
+                    services.add(service)
+
+            return sorted(services)
+
+          def get_sonar_statuses(run_jobs, services):
+            statuses = {service: "unknown" for service in services}
+            statuses["frontend"] = "unknown"
+
+            for job in run_jobs:
               name = job.get("name", "")
               conclusion = job.get("conclusion") or job.get("status") or "unknown"
               if name == "SonarQube - frontend":
@@ -582,6 +601,9 @@ jobs:
           def result_ok(result: str):
             return (result or "").lower() in ("success", "skipped")
 
+          run_jobs = fetch_run_jobs()
+          services = discover_services(run_jobs)
+
           backend_ok = result_ok(os.environ.get("BACKEND_UNIT_RESULT")) and result_ok(os.environ.get("BACKEND_INT_RESULT"))
           frontend_ok = result_ok(os.environ.get("FRONTEND_RESULT"))
           sonar_ok = result_ok(os.environ.get("SONAR_BACKEND_RESULT")) and result_ok(os.environ.get("SONAR_FRONTEND_RESULT"))
@@ -603,7 +625,7 @@ jobs:
           lines.append(f"- sonarqube: {esc(os.environ.get('SONAR_BACKEND_RESULT', 'unknown'))}")
           lines.append(f"- sonarqube-frontend: {esc(os.environ.get('SONAR_FRONTEND_RESULT', 'unknown'))}")
 
-          sonar_statuses = get_sonar_statuses()
+          sonar_statuses = get_sonar_statuses(run_jobs, services)
 
           lines.append("")
           lines.append("<b>SonarQube checks</b>")
@@ -648,7 +670,6 @@ jobs:
             f.write("\nEOF\n")
           PY
         env:
-          BACKEND_SERVICES_JSON: ${{ env.BACKEND_SERVICES_JSON }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BACKEND_UNIT_RESULT: ${{ needs.backend-unit.result }}
           BACKEND_INT_RESULT: ${{ needs.backend-integration.result }}
