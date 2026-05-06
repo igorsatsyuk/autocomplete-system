@@ -118,7 +118,7 @@ public class RedisSearchUpdater {
             while (clearInProgress || pendingClears > 0) {
                 try {
                     clearCondition.await();
-                } catch (InterruptedException ex) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                     return false;
                 }

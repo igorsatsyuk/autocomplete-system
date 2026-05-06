@@ -6,22 +6,25 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.KafkaContainer;
+import org.testcontainers.kafka.ConfluentKafkaContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 import redis.clients.jedis.Jedis;
+import java.util.concurrent.locks.LockSupport;
 
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CdcServiceRedisIT {
 
     @Container
-    static final KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
+    static final ConfluentKafkaContainer kafka = new ConfluentKafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
 
     @Container
     static final GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7.2-alpine"))
@@ -78,20 +81,27 @@ class CdcServiceRedisIT {
                 score = jedis.zscore("autocomplete:ja", "java");
             }
             if (score == null) {
-                Thread.sleep(250);
+                LockSupport.parkNanos(Duration.ofMillis(250).toNanos());
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedException("Interrupted while waiting for Redis score update");
+                }
             }
         }
 
-        assertThat(score).isNotNull();
-        assertThat(score).isEqualTo(10.0d);
+        assertThat(score).isNotNull().isEqualTo(10.0d);
     }
 
     private static void createTopicIfMissing(String topicName) throws Exception {
         Map<String, Object> configs = Map.of("bootstrap.servers", kafka.getBootstrapServers());
         try (AdminClient adminClient = AdminClient.create(configs)) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(topicName, 1, (short) 1))).all().get();
-        } catch (Exception ignored) {
-            // Topic may already exist, which is acceptable for this test.
+        } catch (ExecutionException ex) {
+            if (!(ex.getCause() instanceof TopicExistsException)) {
+                throw ex;
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw ex;
         }
     }
 }
