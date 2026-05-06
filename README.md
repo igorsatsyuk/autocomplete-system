@@ -1,6 +1,6 @@
 # Autocomplete System
 
-Event-driven autocomplete pipeline with Kafka, Kafka Streams, Debezium CDC, PostgreSQL, Redis, and Angular UI.
+Production‑grade event‑driven autocomplete system built with Kafka Streams, Debezium CDC, PostgreSQL, Redis, and Angular. It aggregates search queries in real time, projects CDC updates into Redis prefix indexes, and serves fast, ranked autocomplete suggestions.
 
 The system records searches, aggregates query frequency in PostgreSQL, projects DB changes into Redis prefix indexes, and serves fast autocomplete suggestions.
 
