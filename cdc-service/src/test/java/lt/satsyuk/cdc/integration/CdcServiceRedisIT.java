@@ -6,6 +6,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -23,6 +24,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -80,6 +82,9 @@ class CdcServiceRedisIT {
             }
             if (score == null) {
                 LockSupport.parkNanos(Duration.ofMillis(250).toNanos());
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedException("Interrupted while waiting for Redis score update");
+                }
             }
         }
 
@@ -90,8 +95,13 @@ class CdcServiceRedisIT {
         Map<String, Object> configs = Map.of("bootstrap.servers", kafka.getBootstrapServers());
         try (AdminClient adminClient = AdminClient.create(configs)) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(topicName, 1, (short) 1))).all().get();
-        } catch (Exception _) {
-            // Topic may already exist, which is acceptable for this test.
+        } catch (ExecutionException ex) {
+            if (!(ex.getCause() instanceof TopicExistsException)) {
+                throw ex;
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw ex;
         }
     }
 }
