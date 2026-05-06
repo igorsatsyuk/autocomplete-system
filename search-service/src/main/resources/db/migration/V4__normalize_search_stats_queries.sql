@@ -18,9 +18,8 @@
 -- Normalize historical rows using the same high-level contract as runtime:
 -- trim first, then lowercase, then drop effectively blank keys.
 --   1. Trim all queries (Java String.trim() compat: [\u0000-\u0020])
---   2. Lowercase with PostgreSQL lower() under database collation.
---      This is best-effort and can still diverge from Java Locale.ROOT
---      in edge-case locales (for example Turkish).
+--   2. Lowercase only ASCII-safe keys; keep non-ASCII keys trim-normalized
+--      without case fold to avoid locale/collation-dependent rewrites.
 --   3. Drop rows that are effectively blank under Java isBlank() semantics
 --      (including Unicode space separators like U+2003 EM SPACE)
 
@@ -35,7 +34,11 @@ WITH normalized AS (
     WHERE query IS NOT NULL
 ), collapsed AS (
     SELECT
-        pg_catalog.lower(trimmed_query) AS query,
+        CASE
+            WHEN octet_length(trimmed_query) = char_length(trimmed_query)
+                THEN pg_catalog.lower(trimmed_query)
+            ELSE trimmed_query
+        END AS query,
         frequency,
         updated_at
     FROM normalized

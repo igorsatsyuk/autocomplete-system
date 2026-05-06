@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 
+import java.time.Duration;
 import java.util.Locale;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -18,6 +19,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class RedisSearchUpdater {
 
     private static final Logger log = LoggerFactory.getLogger(RedisSearchUpdater.class);
+    private static final Duration CLEAR_INDEX_TIMEOUT = Duration.ofSeconds(30);
 
     private final ReactiveStringRedisTemplate redis;
     private final String redisPrefix;
@@ -51,9 +53,9 @@ public class RedisSearchUpdater {
                     .map(i -> normalized.substring(0, i))
                     .flatMap(prefix -> {
                         String key = redisPrefix + prefix;
-                            return redis.opsForZSet()
-                                    .add(key, normalized, count)
-                                    .then();
+                        return redis.opsForZSet()
+                                .add(key, normalized, count)
+                                .then();
                     })
                     .then()
                     .doOnSuccess(ignored -> log.debug("Redis index updated for '{}'", normalized))
@@ -87,7 +89,7 @@ public class RedisSearchUpdater {
         try {
             redis.delete(redis.scan(ScanOptions.scanOptions().match(pattern).count(100).build()))
                     .doOnSuccess(count -> log.debug("Redis index cleared {} key(s) for pattern '{}'", count, pattern))
-                    .block();
+                    .block(CLEAR_INDEX_TIMEOUT);
         } finally {
             finishClear();
         }
