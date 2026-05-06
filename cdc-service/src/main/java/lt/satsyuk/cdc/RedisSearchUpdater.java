@@ -19,10 +19,10 @@ import java.util.concurrent.locks.ReentrantLock;
 public class RedisSearchUpdater {
 
     private static final Logger log = LoggerFactory.getLogger(RedisSearchUpdater.class);
-    private static final Duration CLEAR_INDEX_TIMEOUT = Duration.ofSeconds(30);
 
     private final ReactiveStringRedisTemplate redis;
     private final String redisPrefix;
+    private final Duration clearIndexTimeout;
     private final ReentrantLock clearLock = new ReentrantLock();
     private final Condition clearCondition = clearLock.newCondition();
     private int inFlightUpdates;
@@ -31,10 +31,12 @@ public class RedisSearchUpdater {
 
     public RedisSearchUpdater(
             ReactiveStringRedisTemplate redis,
-            @Value("${autocomplete.redis-prefix:" + RedisKeys.AUTOCOMPLETE_PREFIX + "}") String redisPrefix
+            @Value("${autocomplete.redis-prefix:" + RedisKeys.AUTOCOMPLETE_PREFIX + "}") String redisPrefix,
+            @Value("${autocomplete.clear-index-timeout:PT5M}") Duration clearIndexTimeout
     ) {
         this.redis = redis;
         this.redisPrefix = redisPrefix;
+        this.clearIndexTimeout = clearIndexTimeout;
     }
 
     public void updateQueryScore(String query, long count) {
@@ -89,7 +91,7 @@ public class RedisSearchUpdater {
         try {
             redis.delete(redis.scan(ScanOptions.scanOptions().match(pattern).count(100).build()))
                     .doOnSuccess(count -> log.debug("Redis index cleared {} key(s) for pattern '{}'", count, pattern))
-                    .block(CLEAR_INDEX_TIMEOUT);
+                    .block(clearIndexTimeout);
         } finally {
             finishClear();
         }

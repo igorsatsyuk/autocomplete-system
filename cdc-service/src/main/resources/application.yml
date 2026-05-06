@@ -28,6 +28,7 @@ cdc:
 
 autocomplete:
   redis-prefix: "${AUTOCOMPLETE_REDIS_PREFIX:autocomplete:}"
+  clear-index-timeout: ${AUTOCOMPLETE_CLEAR_INDEX_TIMEOUT:PT5M}
 
 ---
 spring:

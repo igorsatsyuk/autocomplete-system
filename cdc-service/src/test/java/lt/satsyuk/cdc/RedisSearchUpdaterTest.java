@@ -40,7 +40,7 @@ class RedisSearchUpdaterTest {
 
     @BeforeEach
     void setUp() {
-        updater = new RedisSearchUpdater(redis, "autocomplete:");
+        updater = new RedisSearchUpdater(redis, "autocomplete:", Duration.ofSeconds(30));
     }
 
     @Test

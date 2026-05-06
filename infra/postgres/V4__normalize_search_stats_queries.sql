@@ -15,11 +15,13 @@
 --      If SEARCH_STREAMS_APPLICATION_ID/search.streams.application-id is overridden,
 --      use a fresh application id during rollout as well.
 --
--- Normalize historical rows using the same high-level contract as runtime:
--- trim first, then lowercase, then drop effectively blank keys.
+-- Normalize historical rows with a rollout-safe contract:
+-- trim first, lowercase ASCII-safe keys only, then drop effectively blank keys.
 --   1. Trim all queries (Java String.trim() compat: [\u0000-\u0020])
 --   2. Lowercase only ASCII-safe keys; keep non-ASCII keys trim-normalized
 --      without case fold to avoid locale/collation-dependent rewrites.
+--      Runtime still uses Locale.ROOT lowercasing, so historical non-ASCII
+--      splits are not merged by this migration.
 --   3. Drop rows that are effectively blank under Java isBlank() semantics
 --      (including Unicode space separators like U+2003 EM SPACE)
 
