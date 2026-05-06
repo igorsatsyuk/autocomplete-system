@@ -59,6 +59,20 @@ describe('AutocompleteService', () => {
       req.flush(mockEntries);
     });
 
+    it('trims and lowercases query before sending HTTP request', () => {
+      const mockEntries: AutocompleteEntry[] = [{ query: 'java', score: 5 }];
+
+      service.fetchSuggestions('  JA  ').subscribe(entries => {
+        expect(entries).toEqual(mockEntries);
+      });
+
+      const req = http.expectOne(r =>
+        r.url === '/api/complete' &&
+        r.params.get('q') === 'ja'
+      );
+      req.flush(mockEntries);
+    });
+
     it('propagates HTTP errors', (done) => {
       service.fetchSuggestions('err').subscribe({
         error: (e) => {

@@ -13,9 +13,10 @@
   </form>
 
   <ul class="suggestions" *ngIf="showSuggestions">
-    <li *ngFor="let s of suggestions$ | async"
-        (click)="onSelectSuggestion(s)">
-      {{ s.query }}
+    <li *ngFor="let s of suggestions$ | async">
+      <button type="button" (click)="onSelectSuggestion(s)">
+        {{ s.query }}
+      </button>
     </li>
   </ul>
 </div>
