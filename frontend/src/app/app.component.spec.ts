@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync } from '@angular/core/testing';
 import { AppComponent } from './app.component';
 import { AutocompleteService, AutocompleteEntry } from './services/autocomplete.service';
 import { of, Subject } from 'rxjs';
@@ -122,8 +122,8 @@ describe('AppComponent', () => {
       suggestions$.next([{ query: 'java', score: 5 }]);
       fixture.detectChanges();
 
-      const item: HTMLElement = fixture.nativeElement.querySelector('ul.suggestions li');
-      item.click();
+      const itemButton: HTMLButtonElement = fixture.nativeElement.querySelector('ul.suggestions li button');
+      itemButton.click();
       fixture.detectChanges();
 
       expect(component.query).toBe('java');

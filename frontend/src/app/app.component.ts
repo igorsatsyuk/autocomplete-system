@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component } from '@angular/core';
 import { AutocompleteService, AutocompleteEntry } from './services/autocomplete.service';
 import { Observable } from 'rxjs';
 import { CommonModule } from '@angular/common';
@@ -11,17 +11,16 @@ import { FormsModule } from '@angular/forms';
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']
 })
-export class AppComponent implements OnInit {
+export class AppComponent {
 
   query = '';
   suggestions$: Observable<AutocompleteEntry[]>;
   showSuggestions = false;
 
-  constructor(private autocomplete: AutocompleteService) {
+  constructor(private readonly autocomplete: AutocompleteService) {
     this.suggestions$ = this.autocomplete.searchStream();
   }
 
-  ngOnInit(): void {}
 
   onInputChange(value: string) {
     this.query = value;

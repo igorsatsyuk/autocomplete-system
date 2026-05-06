@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
-import { Observable, Subject } from 'rxjs';
+import { Observable, Subject, of } from 'rxjs';
 
 export interface AutocompleteEntry {
   query: string;
@@ -13,9 +13,9 @@ export interface AutocompleteEntry {
 })
 export class AutocompleteService {
 
-  private input$ = new Subject<string>();
+  private readonly input$ = new Subject<string>();
 
-  constructor(private http: HttpClient) {}
+  constructor(private readonly http: HttpClient) {}
 
   searchStream(): Observable<AutocompleteEntry[]> {
     return this.input$.pipe(
@@ -30,11 +30,8 @@ export class AutocompleteService {
   }
 
   fetchSuggestions(q: string): Observable<AutocompleteEntry[]> {
-    if (!q || !q.trim()) {
-      return new Observable<AutocompleteEntry[]>(observer => {
-        observer.next([]);
-        observer.complete();
-      });
+    if (!q?.trim()) {
+      return of([]);
     }
     return this.http.get<AutocompleteEntry[]>(`/api/complete`, {
       params: { q, limit: 10 }
