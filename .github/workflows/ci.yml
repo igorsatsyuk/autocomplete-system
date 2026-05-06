@@ -456,7 +456,7 @@ jobs:
   notify-telegram:
     name: Notify Telegram
     runs-on: ubuntu-latest
-    needs: [backend-unit, backend-integration, frontend, sonarqube, sonarqube-frontend]
+    needs: [backend-unit, backend-integration, frontend, sonarqube, sonarqube-frontend, docker]
     if: ${{ always() }}
     env:
       TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
@@ -486,7 +486,7 @@ jobs:
         id: compose
         shell: bash
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           import os
           import html
@@ -598,16 +598,32 @@ jobs:
           def esc(value: str):
             return html.escape(str(value), quote=True)
 
-          def result_ok(result: str):
-            return (result or "").lower() in ("success", "skipped")
+          def workflow_overall_status(run_jobs):
+            relevant_jobs = []
+            for job in run_jobs:
+              name = job.get("name", "")
+              if name == "Notify Telegram":
+                continue
+              if name == "Build common" or name == "Frontend (Angular)" or name == "Docker Build":
+                relevant_jobs.append(job)
+                continue
+              if name.startswith(("Unit - ", "Integration - ", "SonarQube - ")):
+                relevant_jobs.append(job)
+
+            if not relevant_jobs:
+              return "unknown"
+
+            for job in relevant_jobs:
+              conclusion = (job.get("conclusion") or job.get("status") or "unknown").lower()
+              if conclusion != "success":
+                return "failure"
+
+            return "success"
 
           run_jobs = fetch_run_jobs()
           services = discover_services(run_jobs)
 
-          backend_ok = result_ok(os.environ.get("BACKEND_UNIT_RESULT")) and result_ok(os.environ.get("BACKEND_INT_RESULT"))
-          frontend_ok = result_ok(os.environ.get("FRONTEND_RESULT"))
-          sonar_ok = result_ok(os.environ.get("SONAR_BACKEND_RESULT")) and result_ok(os.environ.get("SONAR_FRONTEND_RESULT"))
-          overall_status = "success" if (backend_ok and frontend_ok and sonar_ok) else "failure"
+          overall_status = workflow_overall_status(run_jobs)
 
           lines = []
           lines.append("autocomplete-system CI finished")
@@ -624,6 +640,7 @@ jobs:
           lines.append(f"- frontend: {esc(os.environ.get('FRONTEND_RESULT', 'unknown'))}")
           lines.append(f"- sonarqube: {esc(os.environ.get('SONAR_BACKEND_RESULT', 'unknown'))}")
           lines.append(f"- sonarqube-frontend: {esc(os.environ.get('SONAR_FRONTEND_RESULT', 'unknown'))}")
+          lines.append(f"- docker: {esc(os.environ.get('DOCKER_RESULT', 'unknown'))}")
 
           sonar_statuses = get_sonar_statuses(run_jobs, services)
 
@@ -676,6 +693,7 @@ jobs:
           FRONTEND_RESULT: ${{ needs.frontend.result }}
           SONAR_BACKEND_RESULT: ${{ needs.sonarqube.result }}
           SONAR_FRONTEND_RESULT: ${{ needs.sonarqube-frontend.result }}
+          DOCKER_RESULT: ${{ needs.docker.result }}
 
       - name: Notify Telegram
         if: ${{ env.TELEGRAM_TO != '' && env.TELEGRAM_TOKEN != '' }}
