@@ -574,12 +574,30 @@ jobs:
             for job in run_jobs:
               name = job.get("name", "")
               conclusion = job.get("conclusion") or job.get("status") or "unknown"
+
+              analysis_step_conclusion = ""
+              for step in job.get("steps", []):
+                step_name = step.get("name", "")
+                if step_name in ("SonarQube analysis", "SonarQube analysis (frontend)"):
+                  analysis_step_conclusion = (step.get("conclusion") or step.get("status") or "").lower()
+                  break
+
+              # If the analysis step is explicitly skipped, reflect that in summary.
+              if analysis_step_conclusion == "skipped":
+                normalized = "skipped"
+              elif analysis_step_conclusion == "success":
+                normalized = "success"
+              elif analysis_step_conclusion in ("failure", "cancelled", "timed_out", "action_required"):
+                normalized = "failure"
+              else:
+                normalized = conclusion
+
               if name == "SonarQube - frontend":
-                statuses["frontend"] = conclusion
+                statuses["frontend"] = normalized
               elif name.startswith("SonarQube - "):
                 service = name.replace("SonarQube - ", "", 1)
                 if service in statuses:
-                  statuses[service] = conclusion
+                  statuses[service] = normalized
 
             return statuses
 
@@ -615,8 +633,14 @@ jobs:
 
             for job in relevant_jobs:
               conclusion = (job.get("conclusion") or job.get("status") or "unknown").lower()
-              if conclusion != "success":
+              if conclusion in ("failure", "cancelled", "timed_out", "action_required"):
                 return "failure"
+
+            # Treat success/skipped/neutral as non-failing for workflow-level summary.
+            for job in relevant_jobs:
+              conclusion = (job.get("conclusion") or job.get("status") or "unknown").lower()
+              if conclusion not in ("success", "skipped", "neutral"):
+                return "unknown"
 
             return "success"
 
