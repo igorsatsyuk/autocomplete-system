@@ -53,7 +53,10 @@ public class RedisSearchUpdater {
             return;
         }
         log.debug("Updating Redis index for query='{}', count={}", normalized, count);
-        beginUpdate();
+        if (!beginUpdate()) {
+            log.warn("Interrupted while waiting to update Redis index for query='{}'", normalized);
+            return;
+        }
         try {
             Flux.range(1, normalized.length())
                     .map(i -> normalized.substring(0, i))
@@ -109,13 +112,19 @@ public class RedisSearchUpdater {
         }
     }
 
-    private void beginUpdate() {
+    private boolean beginUpdate() {
         clearLock.lock();
         try {
             while (clearInProgress || pendingClears > 0) {
-                clearCondition.awaitUninterruptibly();
+                try {
+                    clearCondition.await();
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
             }
             inFlightUpdates++;
+            return true;
         } finally {
             clearLock.unlock();
         }
