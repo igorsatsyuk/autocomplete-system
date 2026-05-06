@@ -93,14 +93,10 @@ public class RedisSearchUpdater {
         String pattern = redisPrefix + "*";
         beginClear();
         try {
-            try {
-                redis.delete(redis.scan(ScanOptions.scanOptions().match(pattern).count(100).build()))
-                        .doOnSuccess(count -> log.debug("Redis index cleared {} key(s) for pattern '{}'", count, pattern))
-                        .block(clearIndexTimeout);
-            } catch (RuntimeException ex) {
-                log.error("Failed to clear Redis index for pattern '{}' with timeout {}", pattern, clearIndexTimeout, ex);
-                throw ex;
-            }
+            redis.delete(redis.scan(ScanOptions.scanOptions().match(pattern).count(100).build()))
+                    .doOnSuccess(count -> log.debug("Redis index cleared {} key(s) for pattern '{}'", count, pattern))
+                    .doOnError(ex -> log.error("Failed to clear Redis index for pattern '{}' with timeout {}", pattern, clearIndexTimeout, ex))
+                    .block(clearIndexTimeout);
         } finally {
             finishClear();
         }

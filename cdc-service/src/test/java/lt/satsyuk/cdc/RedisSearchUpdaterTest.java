@@ -45,7 +45,8 @@ class RedisSearchUpdaterTest {
 
     @Test
     void rejectsBlankRedisPrefix() {
-        assertThatThrownBy(() -> new RedisSearchUpdater(redis, "   ", Duration.ofSeconds(30)))
+        Duration timeout = Duration.ofSeconds(30);
+        assertThatThrownBy(() -> new RedisSearchUpdater(redis, "   ", timeout))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("autocomplete.redis-prefix");
     }
