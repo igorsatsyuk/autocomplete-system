@@ -14,8 +14,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.kafka.ConfluentKafkaContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
@@ -41,7 +41,7 @@ class SearchServiceKafkaIT {
             .withPassword("autocomplete");
 
     @Container
-    static final KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
+    static final ConfluentKafkaContainer kafka = new ConfluentKafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
 
     @DynamicPropertySource
     static void configure(DynamicPropertyRegistry registry) {
