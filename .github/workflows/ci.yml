@@ -451,3 +451,62 @@ jobs:
       # Frontend uses its own directory as context
       - name: Build frontend image
         run: docker build -f frontend/Dockerfile -t frontend:ci frontend
+
+  # --- 8. Telegram notification -------------------------------------------------
+  notify-telegram:
+    name: Notify Telegram
+    runs-on: ubuntu-latest
+    needs: [backend-unit, backend-integration, frontend, sonarqube, sonarqube-frontend, docker]
+    if: ${{ always() }}
+    env:
+      TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Download unit test reports artifacts
+        if: always()
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: unit-test-reports-*
+          path: test-reports/unit
+          if-no-artifact-found: ignore
+
+      - name: Download integration test reports artifacts
+        if: always()
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: integration-test-reports-*
+          path: test-reports/integration
+          if-no-artifact-found: ignore
+
+      - name: Compose Telegram message
+        id: compose
+        shell: bash
+        run: python3 .github/scripts/compose_telegram_message.py
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKEND_UNIT_RESULT: ${{ needs.backend-unit.result }}
+          BACKEND_INT_RESULT: ${{ needs.backend-integration.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          SONAR_BACKEND_RESULT: ${{ needs.sonarqube.result }}
+          SONAR_FRONTEND_RESULT: ${{ needs.sonarqube-frontend.result }}
+          DOCKER_RESULT: ${{ needs.docker.result }}
+
+      - name: Notify Telegram
+        if: ${{ env.TELEGRAM_TO != '' && env.TELEGRAM_TOKEN != '' }}
+        uses: appleboy/telegram-action@221e6b684967abe813051ee4a37dd61770a83ad3 # v1.0.1
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: ${{ steps.compose.outputs.message }}
+          format: html
+
+      - name: Telegram skipped (missing secrets)
+        if: ${{ env.TELEGRAM_TO == '' || env.TELEGRAM_TOKEN == '' }}
+        run: echo "TELEGRAM_TO and/or TELEGRAM_TOKEN are not set. Skipping Telegram notification."
+
