@@ -130,8 +130,21 @@ public class RedisSearchUpdater {
         clearLock.lock();
         try {
             pendingClears++;
+            long remainingNanos = clearIndexTimeout.toNanos();
             while (clearInProgress || inFlightUpdates > 0) {
-                clearCondition.awaitUninterruptibly();
+                if (remainingNanos <= 0L) {
+                    pendingClears--;
+                    clearCondition.signalAll();
+                    throw new IllegalStateException("Timed out waiting for in-flight updates before clearing Redis index");
+                }
+                try {
+                    remainingNanos = clearCondition.awaitNanos(remainingNanos);
+                } catch (InterruptedException ex) {
+                    pendingClears--;
+                    clearCondition.signalAll();
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while waiting to clear Redis index", ex);
+                }
             }
             pendingClears--;
             clearInProgress = true;

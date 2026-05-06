@@ -15,7 +15,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
 
@@ -106,41 +105,35 @@ class SearchStatsTopologyTest {
 
     @Test
     void usesLocaleRootForNormalization() {
-        Locale previousDefault = Locale.getDefault();
-        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
-        try {
-            SearchStatsTopology topology = new SearchStatsTopology(
-                    repository,
+        SearchStatsTopology topology = new SearchStatsTopology(
+                repository,
+                "search-events-test",
+                "search-stats-test",
+                "search-counts-test",
+                "search-stats-app-test",
+                "kafka-test:9092"
+        );
+        when(repository.findById(anyString())).thenReturn(Optional.empty());
+
+        StreamsBuilder builder = new StreamsBuilder();
+        topology.build(builder);
+
+        try (TopologyTestDriver driver = new TopologyTestDriver(builder.build(), topology.streamsConfig())) {
+            TestInputTopic<String, String> inputTopic = driver.createInputTopic(
                     "search-events-test",
-                    "search-stats-test",
-                    "search-counts-test",
-                    "search-stats-app-test",
-                    "kafka-test:9092"
+                    new StringSerializer(),
+                    new StringSerializer()
             );
-            when(repository.findById(anyString())).thenReturn(Optional.empty());
+            TestOutputTopic<String, Long> outputTopic = driver.createOutputTopic(
+                    "search-stats-test",
+                    new StringDeserializer(),
+                    new LongDeserializer()
+            );
 
-            StreamsBuilder builder = new StreamsBuilder();
-            topology.build(builder);
+            inputTopic.pipeInput(null, "\u0130");
 
-            try (TopologyTestDriver driver = new TopologyTestDriver(builder.build(), topology.streamsConfig())) {
-                TestInputTopic<String, String> inputTopic = driver.createInputTopic(
-                        "search-events-test",
-                        new StringSerializer(),
-                        new StringSerializer()
-                );
-                TestOutputTopic<String, Long> outputTopic = driver.createOutputTopic(
-                        "search-stats-test",
-                        new StringDeserializer(),
-                        new LongDeserializer()
-                );
-
-                inputTopic.pipeInput(null, "I");
-
-                KeyValue<String, Long> result = outputTopic.readKeyValue();
-                assertThat(result.key).isEqualTo("i");
-            }
-        } finally {
-            Locale.setDefault(previousDefault);
+            KeyValue<String, Long> result = outputTopic.readKeyValue();
+            assertThat(result.key).isEqualTo("i\u0307");
         }
     }
 

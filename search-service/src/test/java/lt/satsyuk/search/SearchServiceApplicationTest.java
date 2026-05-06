@@ -63,6 +63,9 @@ class SearchServiceApplicationTest {
         } catch (NoSuchMethodException e) {
             throw new AssertionError("kafkaStreams bean method is missing", e);
         }
+        assertThat(beanMetadata)
+                .as("kafkaStreams method should be annotated with @Bean")
+                .isNotNull();
 
         try (MockedConstruction<KafkaStreams> kafkaStreams = org.mockito.Mockito.mockConstruction(KafkaStreams.class)) {
             try (GenericApplicationContext context = new GenericApplicationContext()) {

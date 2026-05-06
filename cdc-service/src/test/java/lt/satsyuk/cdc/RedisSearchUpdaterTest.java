@@ -105,6 +105,20 @@ class RedisSearchUpdaterTest {
     }
 
     @Test
+    void clearIndexTimesOutWhileWaitingForInFlightUpdates() {
+        RedisSearchUpdater shortTimeoutUpdater = new RedisSearchUpdater(redis, "autocomplete:", Duration.ofMillis(50));
+        when(redis.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.add(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyDouble()))
+                .thenReturn(Mono.never());
+
+        shortTimeoutUpdater.updateQueryScore("java", 1L);
+
+        assertThatThrownBy(shortTimeoutUpdater::clearIndex)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Timed out waiting for in-flight updates");
+    }
+
+    @Test
     void clearIndexWaitsForInFlightUpdateAndBlocksNewUpdates() {
         CountDownLatch firstUpdateStarted = new CountDownLatch(1);
         CountDownLatch releaseFirstUpdate = new CountDownLatch(1);
