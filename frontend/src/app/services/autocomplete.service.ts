@@ -30,11 +30,12 @@ export class AutocompleteService {
   }
 
   fetchSuggestions(q: string): Observable<AutocompleteEntry[]> {
-    if (!q?.trim()) {
+    const normalized = q?.trim().toLowerCase();
+    if (!normalized) {
       return of([]);
     }
     return this.http.get<AutocompleteEntry[]>(`/api/complete`, {
-      params: { q, limit: 10 }
+      params: { q: normalized, limit: 10 }
     });
   }
 
