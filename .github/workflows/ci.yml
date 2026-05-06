@@ -472,6 +472,7 @@ jobs:
         with:
           pattern: unit-test-reports-*
           path: test-reports/unit
+          if-no-artifact-found: ignore
 
       - name: Download integration test reports artifacts
         if: always()
@@ -479,6 +480,7 @@ jobs:
         with:
           pattern: integration-test-reports-*
           path: test-reports/integration
+          if-no-artifact-found: ignore
 
       - name: Compose Telegram message
         id: compose
@@ -487,6 +489,7 @@ jobs:
           python - <<'PY'
           import json
           import os
+          import html
           import urllib.request
           import xml.etree.ElementTree as ET
           from pathlib import Path
@@ -574,34 +577,41 @@ jobs:
               counts["skipped"] = 1
             return counts
 
-          backend_ok = os.environ.get("BACKEND_UNIT_RESULT") == "success" and os.environ.get("BACKEND_INT_RESULT") == "success"
-          frontend_ok = os.environ.get("FRONTEND_RESULT") == "success"
-          overall_status = "success" if (backend_ok and frontend_ok) else "failure"
+          def esc(value: str):
+            return html.escape(str(value), quote=True)
+
+          def result_ok(result: str):
+            return (result or "").lower() in ("success", "skipped")
+
+          backend_ok = result_ok(os.environ.get("BACKEND_UNIT_RESULT")) and result_ok(os.environ.get("BACKEND_INT_RESULT"))
+          frontend_ok = result_ok(os.environ.get("FRONTEND_RESULT"))
+          sonar_ok = result_ok(os.environ.get("SONAR_BACKEND_RESULT")) and result_ok(os.environ.get("SONAR_FRONTEND_RESULT"))
+          overall_status = "success" if (backend_ok and frontend_ok and sonar_ok) else "failure"
 
           lines = []
           lines.append("autocomplete-system CI finished")
           lines.append("")
-          lines.append(f"*Status:* {overall_status}")
-          lines.append(f"*Branch:* {os.environ.get('GITHUB_REF_NAME', '')}")
-          lines.append(f"*Commit:* {os.environ.get('GITHUB_SHA', '')}")
-          lines.append(f"*Author:* {os.environ.get('GITHUB_ACTOR', '')}")
-          lines.append(f"*Workflow:* {os.environ.get('GITHUB_WORKFLOW', '')}")
+          lines.append(f"<b>Status:</b> {esc(overall_status)}")
+          lines.append(f"<b>Branch:</b> {esc(os.environ.get('GITHUB_REF_NAME', ''))}")
+          lines.append(f"<b>Commit:</b> {esc(os.environ.get('GITHUB_SHA', ''))}")
+          lines.append(f"<b>Author:</b> {esc(os.environ.get('GITHUB_ACTOR', ''))}")
+          lines.append(f"<b>Workflow:</b> {esc(os.environ.get('GITHUB_WORKFLOW', ''))}")
           lines.append("")
-          lines.append("*Job results*")
-          lines.append(f"- backend-unit: {os.environ.get('BACKEND_UNIT_RESULT', 'unknown')}")
-          lines.append(f"- backend-integration: {os.environ.get('BACKEND_INT_RESULT', 'unknown')}")
-          lines.append(f"- frontend: {os.environ.get('FRONTEND_RESULT', 'unknown')}")
-          lines.append(f"- sonarqube: {os.environ.get('SONAR_BACKEND_RESULT', 'unknown')}")
-          lines.append(f"- sonarqube-frontend: {os.environ.get('SONAR_FRONTEND_RESULT', 'unknown')}")
+          lines.append("<b>Job results</b>")
+          lines.append(f"- backend-unit: {esc(os.environ.get('BACKEND_UNIT_RESULT', 'unknown'))}")
+          lines.append(f"- backend-integration: {esc(os.environ.get('BACKEND_INT_RESULT', 'unknown'))}")
+          lines.append(f"- frontend: {esc(os.environ.get('FRONTEND_RESULT', 'unknown'))}")
+          lines.append(f"- sonarqube: {esc(os.environ.get('SONAR_BACKEND_RESULT', 'unknown'))}")
+          lines.append(f"- sonarqube-frontend: {esc(os.environ.get('SONAR_FRONTEND_RESULT', 'unknown'))}")
 
           sonar_statuses = get_sonar_statuses()
 
           lines.append("")
-          lines.append("SonarQube checks")
+          lines.append("<b>SonarQube checks</b>")
           for service in services + ["frontend"]:
             counts = sonar_counts(sonar_statuses.get(service, "unknown"))
             lines.append("")
-            lines.append(f"*{service}*")
+            lines.append(f"<b>{esc(service)}</b>")
             lines.append(f"- Total: {counts['total']}")
             lines.append(f"- ✅ Success: {counts['success']}")
             lines.append(f"- ❌ Failure: {counts['failure']}")
@@ -614,7 +624,7 @@ jobs:
             integration_passed = max(integration["total"] - integration["failed"] - integration["skipped"], 0)
 
             lines.append("")
-            lines.append(f"*{service}*")
+            lines.append(f"<b>{esc(service)}</b>")
             lines.append("")
             lines.append("Unit Tests")
             lines.append(f"- Total: {unit['total']}")
@@ -629,7 +639,7 @@ jobs:
             lines.append(f"- Skipped: {integration['skipped']}")
 
           lines.append("")
-          lines.append(f"Link: {os.environ.get('GITHUB_SERVER_URL', '')}/{os.environ.get('GITHUB_REPOSITORY', '')}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}")
+          lines.append(f"Link: {esc(os.environ.get('GITHUB_SERVER_URL', ''))}/{esc(os.environ.get('GITHUB_REPOSITORY', ''))}/actions/runs/{esc(os.environ.get('GITHUB_RUN_ID', ''))}")
 
           message = "\n".join(lines)
           output_path = os.environ["GITHUB_OUTPUT"]
@@ -648,12 +658,12 @@ jobs:
 
       - name: Notify Telegram
         if: ${{ env.TELEGRAM_TO != '' && env.TELEGRAM_TOKEN != '' }}
-        uses: appleboy/telegram-action@master
+        uses: appleboy/telegram-action@221e6b684967abe813051ee4a37dd61770a83ad3 # v1.0.1
         with:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_TOKEN }}
           message: ${{ steps.compose.outputs.message }}
-          format: markdown
+          format: html
 
       - name: Telegram skipped (missing secrets)
         if: ${{ env.TELEGRAM_TO == '' || env.TELEGRAM_TOKEN == '' }}
