@@ -141,6 +141,12 @@ def esc(value: str) -> str:
     return html.escape(str(value), quote=True)
 
 
+def emphasize(text: str, enabled: bool) -> str:
+    if not enabled:
+        return text
+    return f"<b>⚠️ {text}</b>"
+
+
 def needs_overall_status() -> str:
     tracked_results = [
         os.environ.get("BACKEND_UNIT_RESULT", "unknown"),
@@ -201,7 +207,10 @@ def main() -> None:
     lines: list[str] = []
     lines.append("autocomplete-system CI finished")
     lines.append("")
-    lines.append(f"<b>Status:</b> {esc(overall_status)}")
+    status_line = f"<b>Status:</b> {esc(overall_status)}"
+    if overall_status == "failure":
+        status_line = f"⚠️ {status_line}"
+    lines.append(status_line)
     lines.append(f"<b>Branch:</b> {esc(os.environ.get('GITHUB_REF_NAME', ''))}")
     lines.append(f"<b>Commit:</b> {esc(os.environ.get('GITHUB_SHA', ''))}")
     lines.append(f"<b>Actor:</b> {esc(os.environ.get('GITHUB_ACTOR', ''))}")
@@ -225,7 +234,7 @@ def main() -> None:
         lines.append(f"<b>{esc(service)}</b>")
         lines.append(f"- Total: {counts['total']}")
         lines.append(f"- ✅ Success: {counts['success']}")
-        lines.append(f"- ❌ Failure: {counts['failure']}")
+        lines.append(emphasize(f"- ❌ Failure: {counts['failure']}", counts["failure"] > 0))
         lines.append(f"- ⏭️ Skipped: {counts['skipped']}")
         lines.append(f"- ❓ Unknown: {counts['unknown']}")
 
@@ -240,15 +249,15 @@ def main() -> None:
         lines.append("")
         lines.append("Unit Tests")
         lines.append(f"- Total: {unit['total']}")
-        lines.append(f"- Passed: {unit_passed}")
-        lines.append(f"- Failed: {unit['failed']}")
-        lines.append(f"- Skipped: {unit['skipped']}")
+        lines.append(f"- ✅ Passed: {unit_passed}")
+        lines.append(emphasize(f"- ❌ Failed: {unit['failed']}", unit["failed"] > 0))
+        lines.append(f"- ⏭️ Skipped: {unit['skipped']}")
         lines.append("")
         lines.append("Integration Tests")
         lines.append(f"- Total: {integration['total']}")
-        lines.append(f"- Passed: {integration_passed}")
-        lines.append(f"- Failed: {integration['failed']}")
-        lines.append(f"- Skipped: {integration['skipped']}")
+        lines.append(f"- ✅ Passed: {integration_passed}")
+        lines.append(emphasize(f"- ❌ Failed: {integration['failed']}", integration["failed"] > 0))
+        lines.append(f"- ⏭️ Skipped: {integration['skipped']}")
 
     if warnings:
         lines.append("")
