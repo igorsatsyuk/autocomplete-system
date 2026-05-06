@@ -90,13 +90,20 @@ public class RedisSearchUpdater {
      * </p>
      */
     public void clearIndex() {
+        long startedAtNanos = System.nanoTime();
         String pattern = redisPrefix + "*";
         beginClear();
         try {
+            long elapsedNanos = System.nanoTime() - startedAtNanos;
+            long remainingNanos = clearIndexTimeout.toNanos() - elapsedNanos;
+            if (remainingNanos <= 0L) {
+                throw new IllegalStateException("Timed out before Redis clear phase started");
+            }
+
             redis.delete(redis.scan(ScanOptions.scanOptions().match(pattern).count(100).build()))
                     .doOnSuccess(count -> log.debug("Redis index cleared {} key(s) for pattern '{}'", count, pattern))
                     .doOnError(ex -> log.error("Failed to clear Redis index for pattern '{}' with timeout {}", pattern, clearIndexTimeout, ex))
-                    .block(clearIndexTimeout);
+                    .block(Duration.ofNanos(remainingNanos));
         } finally {
             finishClear();
         }
