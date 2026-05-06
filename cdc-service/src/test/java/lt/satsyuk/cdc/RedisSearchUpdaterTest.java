@@ -169,7 +169,7 @@ class RedisSearchUpdaterTest {
     }
 
     @Test
-    void updatesLowerScoreWhenNewCountIsSmaller() {
+    void writesProvidedScoreToRedis() {
         when(redis.opsForZSet()).thenReturn(zSetOperations);
         when(zSetOperations.add(ArgumentMatchers.anyString(), ArgumentMatchers.eq("java"), ArgumentMatchers.eq(5.0)))
                 .thenReturn(Mono.just(Boolean.TRUE));
