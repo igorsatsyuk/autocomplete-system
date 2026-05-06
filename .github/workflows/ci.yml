@@ -458,6 +458,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [backend-unit, backend-integration, frontend, sonarqube, sonarqube-frontend]
     if: ${{ always() }}
+    env:
+      TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
     permissions:
       contents: read
       actions: read
@@ -644,7 +647,7 @@ jobs:
           SONAR_FRONTEND_RESULT: ${{ needs.sonarqube-frontend.result }}
 
       - name: Notify Telegram
-        if: ${{ secrets.TELEGRAM_TO != '' && secrets.TELEGRAM_TOKEN != '' }}
+        if: ${{ env.TELEGRAM_TO != '' && env.TELEGRAM_TOKEN != '' }}
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_TO }}
@@ -653,6 +656,6 @@ jobs:
           format: markdown
 
       - name: Telegram skipped (missing secrets)
-        if: ${{ secrets.TELEGRAM_TO == '' || secrets.TELEGRAM_TOKEN == '' }}
+        if: ${{ env.TELEGRAM_TO == '' || env.TELEGRAM_TOKEN == '' }}
         run: echo "TELEGRAM_TO and/or TELEGRAM_TOKEN are not set. Skipping Telegram notification."
 
