@@ -1,6 +1,7 @@
 import html
 import json
 import os
+import sys
 import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -10,7 +11,7 @@ UNIT_ROOT = Path("test-reports/unit")
 INTEGRATION_ROOT = Path("test-reports/integration")
 
 
-def collect(root: Path, service: str) -> dict[str, int]:
+def collect(root: Path, service: str, warnings: list[str]) -> dict[str, int]:
     totals = {"total": 0, "failed": 0, "skipped": 0}
     if not root.exists():
         return totals
@@ -20,7 +21,8 @@ def collect(root: Path, service: str) -> dict[str, int]:
             continue
         try:
             xml_root = ET.parse(file_path).getroot()
-        except ET.ParseError:
+        except ET.ParseError as exc:
+            warnings.append(f"Failed to parse JUnit XML for {service}: {file_path} ({exc})")
             continue
 
         suites = [xml_root] if xml_root.tag == "testsuite" else list(xml_root.findall("testsuite"))
@@ -35,7 +37,7 @@ def collect(root: Path, service: str) -> dict[str, int]:
     return totals
 
 
-def fetch_run_jobs() -> list[dict]:
+def fetch_run_jobs(warnings: list[str]) -> list[dict]:
     token = os.environ.get("GH_TOKEN", "")
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     run_id = os.environ.get("GITHUB_RUN_ID", "")
@@ -56,7 +58,8 @@ def fetch_run_jobs() -> list[dict]:
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
-    except Exception:
+    except Exception as exc:
+        warnings.append(f"Failed to fetch GitHub Actions jobs: {exc}")
         return []
 
     return payload.get("jobs", [])
@@ -122,13 +125,15 @@ def get_sonar_statuses(run_jobs: list[dict], services: list[str]) -> dict[str, s
 
 def sonar_counts(status: str) -> dict[str, int]:
     s = (status or "unknown").lower()
-    counts = {"total": 1, "success": 0, "failure": 0, "skipped": 0}
+    counts = {"total": 1, "success": 0, "failure": 0, "skipped": 0, "unknown": 0}
     if s == "success":
         counts["success"] = 1
     elif s in ("failure", "cancelled", "timed_out", "action_required"):
         counts["failure"] = 1
-    else:
+    elif s in ("skipped", "neutral"):
         counts["skipped"] = 1
+    else:
+        counts["unknown"] = 1
     return counts
 
 
@@ -186,7 +191,9 @@ def workflow_overall_status(run_jobs: list[dict]) -> str:
 
 
 def main() -> None:
-    run_jobs = fetch_run_jobs()
+    warnings: list[str] = []
+
+    run_jobs = fetch_run_jobs(warnings)
     services = discover_services(run_jobs)
 
     overall_status = workflow_overall_status(run_jobs)
@@ -220,11 +227,12 @@ def main() -> None:
         lines.append(f"- ✅ Success: {counts['success']}")
         lines.append(f"- ❌ Failure: {counts['failure']}")
         lines.append(f"- ⏭️ Skipped: {counts['skipped']}")
+        lines.append(f"- ❓ Unknown: {counts['unknown']}")
 
     for service in services:
-        unit = collect(UNIT_ROOT, service)
+        unit = collect(UNIT_ROOT, service, warnings)
         unit_passed = max(unit["total"] - unit["failed"] - unit["skipped"], 0)
-        integration = collect(INTEGRATION_ROOT, service)
+        integration = collect(INTEGRATION_ROOT, service, warnings)
         integration_passed = max(integration["total"] - integration["failed"] - integration["skipped"], 0)
 
         lines.append("")
@@ -242,6 +250,12 @@ def main() -> None:
         lines.append(f"- Failed: {integration['failed']}")
         lines.append(f"- Skipped: {integration['skipped']}")
 
+    if warnings:
+        lines.append("")
+        lines.append("<b>Diagnostics</b>")
+        for warning in warnings:
+            lines.append(f"- {esc(warning)}")
+
     lines.append("")
     lines.append(
         f"Link: {esc(os.environ.get('GITHUB_SERVER_URL', ''))}/{esc(os.environ.get('GITHUB_REPOSITORY', ''))}/actions/runs/{esc(os.environ.get('GITHUB_RUN_ID', ''))}"
@@ -253,6 +267,9 @@ def main() -> None:
         output_file.write("message<<EOF\n")
         output_file.write(message)
         output_file.write("\nEOF\n")
+
+    for warning in warnings:
+        print(warning, file=sys.stderr)
 
 
 if __name__ == "__main__":
