@@ -4,7 +4,7 @@
 - This repo is an event-driven autocomplete pipeline: `search-service` records searches, `cdc-service` projects DB changes into Redis, `autocomplete-service` serves suggestions, and `frontend` is the UI + API proxy.
 - Use shared runtime identifiers from `common/src/main/java/lt/satsyuk/common/` via `KafkaTopics` and `RedisKeys`.
 - Follow the main flow: `frontend` -> `SearchController` -> `SearchEventProducer` -> `search-events` -> `SearchStatsTopology` -> Postgres `search_stats` -> `db-changes.public.search_stats` -> `DebeziumConsumer` -> `RedisSearchUpdater` -> Redis keys like `autocomplete:ja` -> `AutocompleteQueryService`.
-- Treat `SearchStatsTopology` as the write-side core: lowercase queries, aggregate in state store `search-counts`, persist via `SearchStatRepository`, emit `search-stats`.
+- Treat `SearchStatsTopology` as the write-side core: trim+lowercase queries, aggregate in state store `search-counts-v2`, persist via `SearchStatRepository`, emit `search-stats`.
 - Treat `DebeziumConsumer` as envelope-based CDC parsing: read `payload.after`, then let `RedisSearchUpdater` fan the query into prefix keys.
 - Keep `AutocompleteQueryService` simple: blank prefixes and non-positive limits return empty results.
 

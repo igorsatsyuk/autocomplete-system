@@ -20,6 +20,7 @@ import java.util.Map;
 public class KafkaConsumerConfig {
 
     private static final String CONSUMER_PROPERTIES_PREFIX = "spring.kafka.consumer.properties.";
+    private static final int DEFAULT_MAX_POLL_INTERVAL_MS = 30 * 60 * 1000;
 
     @Bean
     public ConsumerFactory<String, String> consumerFactory(
@@ -35,6 +36,8 @@ public class KafkaConsumerConfig {
         config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         config.putAll(resolveAdditionalConsumerProperties(environment));
+        // clearIndex() may block during truncate rebuild; keep poll interval conservative by default.
+        config.putIfAbsent(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, DEFAULT_MAX_POLL_INTERVAL_MS);
         return new DefaultKafkaConsumerFactory<>(config);
     }
 
@@ -64,7 +67,10 @@ public class KafkaConsumerConfig {
                     continue;
                 }
                 String kafkaPropertyName = propertyName.substring(CONSUMER_PROPERTIES_PREFIX.length());
-                properties.putIfAbsent(kafkaPropertyName, environment.getProperty(propertyName));
+                String propertyValue = environment.getProperty(propertyName);
+                if (propertyValue != null) {
+                    properties.putIfAbsent(kafkaPropertyName, propertyValue);
+                }
             }
         }
         return properties;

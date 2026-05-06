@@ -2,6 +2,7 @@ package lt.satsyuk.cdc;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import lt.satsyuk.common.kafka.KafkaTopics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,11 +25,22 @@ public class DebeziumConsumer {
 
     @KafkaListener(topicPattern = "${cdc.topic-pattern:" + DEFAULT_TOPIC_PATTERN + "}")
     public void handleDbChange(String message) {
+        if (message == null || message.isBlank()) {
+            return;
+        }
+
         log.debug("Received DB change event: {}", message);
 
         try {
             JsonNode root = objectMapper.readTree(message);
-            JsonNode after = root.path("payload").path("after");
+            JsonNode payload = root.path("payload");
+            String operation = payload.path("op").asText("");
+            if ("t".equals(operation)) {
+                updater.clearIndex();
+                return;
+            }
+
+            JsonNode after = payload.path("after");
             if (after.isMissingNode() || after.isNull()) {
                 return;
             }
@@ -40,7 +52,7 @@ public class DebeziumConsumer {
             }
 
             updater.updateQueryScore(query, frequency);
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             log.error("Failed to parse DB change event", e);
         }
     }

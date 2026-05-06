@@ -192,6 +192,19 @@ jobs:
         working-directory: frontend
         run: npm run lint --if-present
 
+      - name: Test
+        working-directory: frontend
+        run: npm run test:ci
+
+      - name: Upload frontend coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/autocomplete-frontend/lcov.info
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Build
         working-directory: frontend
         run: npm run build --if-present
@@ -236,8 +249,12 @@ jobs:
         if: ${{ env.SONAR_TOKEN == '' }}
         run: echo "SONAR_TOKEN is not set. Skipping SonarQube analysis."
 
+      - name: SonarQube skipped (missing organization on SonarCloud)
+        if: ${{ env.SONAR_TOKEN != '' && (vars.SONAR_HOST_URL == '' || vars.SONAR_HOST_URL == 'https://sonarcloud.io') && vars.SONAR_ORGANIZATION == '' }}
+        run: echo "SONAR_ORGANIZATION is required for SonarCloud. Skipping backend SonarQube analysis."
+
       - name: Cache SonarQube packages
-        if: ${{ env.SONAR_TOKEN != '' }}
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.2.3
         with:
           path: ~/.sonar/cache
@@ -245,21 +262,21 @@ jobs:
           restore-keys: ${{ runner.os }}-sonar-
 
       - name: Download unit coverage report
-        if: ${{ env.SONAR_TOKEN != '' }}
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: unit-coverage-${{ matrix.service }}
           path: coverage/${{ matrix.service }}/unit
 
       - name: Download integration coverage report
-        if: ${{ env.SONAR_TOKEN != '' }}
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: integration-coverage-${{ matrix.service }}
           path: coverage/${{ matrix.service }}/integration
 
       - name: Reorganize coverage reports for SonarQube
-        if: ${{ env.SONAR_TOKEN != '' }}
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
         shell: bash
         run: |
           SERVICE="${{ matrix.service }}"
@@ -298,7 +315,7 @@ jobs:
           [ -f "coverage/$SERVICE/integration/jacoco.xml" ] || { echo "Missing integration coverage report for $SERVICE"; exit 1; }
 
       - name: SonarQube analysis
-        if: ${{ env.SONAR_TOKEN != '' }}
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
         env:
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
           SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
@@ -328,7 +345,82 @@ jobs:
 
           "${cmd[@]}"
 
-  # --- 6. Docker build (no push on PRs) ----------------------------------------
+  # --- 6. SonarQube – frontend -------------------------------------------------
+  sonarqube-frontend:
+    name: SonarQube - frontend
+    runs-on: ubuntu-latest
+    needs: [frontend]
+    permissions:
+      contents: read
+      actions: read
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.actor != 'dependabot[bot]')
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Use Node 20
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        if: ${{ env.SONAR_TOKEN != '' }}
+        working-directory: frontend
+        run: npm ci
+
+      - name: SonarQube skipped (missing token)
+        if: ${{ env.SONAR_TOKEN == '' }}
+        run: echo "SONAR_TOKEN is not set. Skipping SonarQube analysis."
+
+      - name: Download frontend coverage report
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+
+      - name: Ensure lcov.info is at expected path
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
+        shell: bash
+        run: |
+          expected="frontend/coverage/autocomplete-frontend/lcov.info"
+          lcov=$(find frontend/coverage -name "lcov.info" 2>/dev/null | head -1)
+          if [ -n "$lcov" ] && [ "$lcov" != "$expected" ]; then
+            mkdir -p "$(dirname "$expected")"
+            cp "$lcov" "$expected"
+            echo "Reorganized lcov: $lcov -> $expected"
+          fi
+          [ -f "$expected" ] || { echo "lcov.info not found after reorganization"; exit 1; }
+          echo "Coverage report verified at: $expected"
+
+      - name: Configure SonarQube organization
+        if: ${{ env.SONAR_TOKEN != '' && vars.SONAR_ORGANIZATION != '' }}
+        run: echo "sonar.organization=${{ vars.SONAR_ORGANIZATION }}" >> frontend/sonar-project.properties
+
+      - name: SonarQube frontend skipped (missing organization on SonarCloud)
+        if: ${{ env.SONAR_TOKEN != '' && (vars.SONAR_HOST_URL == '' || vars.SONAR_HOST_URL == 'https://sonarcloud.io') && vars.SONAR_ORGANIZATION == '' }}
+        run: echo "SONAR_ORGANIZATION is required for SonarCloud. Skipping frontend SonarQube analysis."
+
+      - name: SonarQube analysis (frontend)
+        if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
+        uses: SonarSource/sonarqube-scan-action@59db25f34e16620e48ab4bb9e4a5dce155cb5432 # v8.0.0
+        env:
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL || 'https://sonarcloud.io' }}
+        with:
+          projectBaseDir: frontend
+          args: >
+            -Dsonar.projectKey=${{ github.event.repository.name }}-frontend
+
+  # --- 7. Docker build (no push on PRs) ----------------------------------------
   docker:
     name: Docker Build
     runs-on: ubuntu-latest

@@ -1,0 +1,77 @@
+-- Normalize historical keys to avoid split counters after trim-based aggregation.
+--
+-- Operational notes:
+--   1. The TRUNCATE below fires a Debezium event with op="t"; the CDC service
+--      calls RedisSearchUpdater.clearIndex() which now BLOCKS the Kafka consumer
+--      thread until all keys matching the configured autocomplete Redis prefix
+--      are deleted. Subsequent
+--      INSERT events then rebuild the index so there is no ZSet entry race.
+--   2. Autocomplete responses will be empty from the moment of TRUNCATE until
+--      CDC has processed all re-inserted rows.  Plan accordingly for large tables.
+--   3. The default Kafka Streams state store is versioned (search-counts-v2) to
+--      avoid stale trim-inconsistent state being carried across this migration.
+--      If SEARCH_STREAMS_STATE_STORE/search.streams.state-store is overridden,
+--      use a fresh store name during rollout.
+--      If SEARCH_STREAMS_APPLICATION_ID/search.streams.application-id is overridden,
+--      use a fresh application id during rollout as well.
+--
+-- Normalize historical rows with a rollout-safe contract:
+-- trim first, lowercase ASCII-safe keys only, then drop effectively blank keys.
+--   1. Trim all queries (Java String.trim() compat: [\u0000-\u0020])
+--   2. Lowercase only ASCII-safe keys; keep non-ASCII keys trim-normalized
+--      without case fold to avoid locale/collation-dependent rewrites.
+--      Runtime still uses Locale.ROOT lowercasing, so historical non-ASCII
+--      splits are not merged by this migration.
+--   3. Drop rows that are effectively blank under Java isBlank() semantics
+--      (including Unicode space separators like U+2003 EM SPACE)
+
+CREATE TEMP TABLE tmp_search_stats_normalized AS
+WITH normalized AS (
+    SELECT
+        -- Java String.trim() removes leading/trailing chars in [\u0000-\u0020].
+        regexp_replace(query, E'^[\\000-\\040]+|[\\000-\\040]+$', '', 'g') AS trimmed_query,
+        frequency,
+        updated_at
+    FROM search_stats
+    WHERE query IS NOT NULL
+), collapsed AS (
+    SELECT
+        CASE
+            WHEN octet_length(trimmed_query) = char_length(trimmed_query)
+                THEN pg_catalog.lower(trimmed_query)
+            ELSE trimmed_query
+        END AS query,
+        frequency,
+        updated_at
+    FROM normalized
+)
+SELECT
+    query,
+    SUM(frequency) AS frequency,
+    MAX(updated_at) AS updated_at
+FROM collapsed
+WHERE query <> ''
+  AND regexp_replace(
+      query,
+      '['
+      || chr(9) || chr(10) || chr(11) || chr(12) || chr(13)
+      || chr(28) || chr(29) || chr(30) || chr(31)
+      || chr(32)
+      || chr(133) || chr(5760)
+      || chr(8192) || chr(8193) || chr(8194) || chr(8195) || chr(8196)
+      || chr(8197) || chr(8198) || chr(8200) || chr(8201)
+      || chr(8202) || chr(8232) || chr(8233) || chr(8287)
+      || chr(12288)
+      || ']',
+      '',
+      'g'
+  ) <> ''
+GROUP BY query;
+
+TRUNCATE TABLE search_stats;
+
+INSERT INTO search_stats (query, frequency, updated_at)
+SELECT query, frequency, updated_at
+FROM tmp_search_stats_normalized;
+
+DROP TABLE tmp_search_stats_normalized;

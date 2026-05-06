@@ -10,6 +10,8 @@ import org.apache.kafka.streams.kstream.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+
+import java.util.Locale;
 import java.util.Properties;
 
 @Component
@@ -26,9 +28,9 @@ public class SearchStatsTopology {
             SearchStatRepository repository,
             @Value("${search.topics.events:" + KafkaTopics.SEARCH_EVENTS + "}") String searchEventsTopic,
             @Value("${search.topics.stats:" + KafkaTopics.SEARCH_STATS + "}") String searchStatsTopic,
-            @Value("${search.streams.state-store:search-counts}") String stateStoreName,
+            @Value("${search.streams.state-store:search-counts-v2}") String stateStoreName,
             @Value("${search.streams.application-id:" + KafkaTopics.SEARCH_STATS + "-app}") String streamsApplicationId,
-            @Value("${spring.kafka.bootstrap-servers:kafka:9092}") String bootstrapServers
+            @Value("${spring.kafka.streams.bootstrap-servers:${spring.kafka.bootstrap-servers:kafka:9092}}") String bootstrapServers
     ) {
         this.repository = repository;
         this.searchEventsTopic = searchEventsTopic;
@@ -43,28 +45,36 @@ public class SearchStatsTopology {
                 Consumed.with(Serdes.String(), Serdes.String()));
 
         KTable<String, Long> counts = events
-                .selectKey((key, value) -> value.toLowerCase())
+                .mapValues(value -> normalizeQuery(value))
+                .filter((ignoredKey, value) -> value != null && !value.isBlank())
+                .selectKey((ignoredKey, value) -> value)
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
                 .count(Materialized.as(stateStoreName));
 
-        counts.toStream().peek((query, count) -> {
-            repository.findById(query)
-                    .ifPresentOrElse(
-                            stat -> {
-                                stat.setFrequency(count);
-                                repository.save(stat);
-                            },
-                            () -> repository.save(new SearchStat(query, count))
-                    );
-        }).to(searchStatsTopic, Produced.with(Serdes.String(), Serdes.Long()));
+        counts.toStream().peek((query, count) -> repository.findById(query)
+                .ifPresentOrElse(
+                        stat -> {
+                            stat.setFrequency(count);
+                            repository.save(stat);
+                        },
+                        () -> repository.save(new SearchStat(query, count))
+                )).to(searchStatsTopic, Produced.with(Serdes.String(), Serdes.Long()));
     }
 
     public Properties streamsConfig() {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, streamsApplicationId);
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         return props;
     }
+
+    private static String normalizeQuery(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        return raw.trim().toLowerCase(Locale.ROOT);
+    }
 }
+

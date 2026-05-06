@@ -9,7 +9,6 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 
-import java.util.HashMap;
 import java.util.Map;
 
 @Configuration
@@ -19,10 +18,11 @@ public class KafkaProducerConfig {
     public ProducerFactory<String, String> producerFactory(
             @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers
     ) {
-        Map<String, Object> config = new HashMap<>();
-        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        Map<String, Object> config = Map.of(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class
+        );
         return new DefaultKafkaProducerFactory<>(config);
     }
 

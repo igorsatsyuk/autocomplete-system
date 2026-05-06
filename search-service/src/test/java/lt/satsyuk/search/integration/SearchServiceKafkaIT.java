@@ -1,13 +1,17 @@
 package lt.satsyuk.search.integration;
 
 import lt.satsyuk.common.kafka.KafkaTopics;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Bean;
+import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.KafkaContainer;
@@ -24,7 +28,6 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 @Testcontainers(disabledWithoutDocker = true)
@@ -47,6 +50,7 @@ class SearchServiceKafkaIT {
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         registry.add("spring.kafka.streams.bootstrap-servers", kafka::getBootstrapServers);
+
     }
 
     @LocalServerPort
@@ -83,6 +87,19 @@ class SearchServiceKafkaIT {
             }
 
             assertThat(found).isNotNull();
+        }
+    }
+
+    @TestConfiguration
+    static class KafkaTopicsConfig {
+        @Bean
+        NewTopic searchEventsTopic() {
+            return TopicBuilder.name(KafkaTopics.SEARCH_EVENTS).partitions(1).replicas(1).build();
+        }
+
+        @Bean
+        NewTopic searchStatsTopic() {
+            return TopicBuilder.name(KafkaTopics.SEARCH_STATS).partitions(1).replicas(1).build();
         }
     }
 }

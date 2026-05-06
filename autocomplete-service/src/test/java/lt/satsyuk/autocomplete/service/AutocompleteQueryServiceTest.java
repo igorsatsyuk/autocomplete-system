@@ -35,17 +35,25 @@ class AutocompleteQueryServiceTest {
     }
 
     @Test
-    void returnsSuggestionsFromConfiguredRedisPrefix() {
+    void returnsSuggestionsFromConfiguredRedisPrefixWithTrimmedLowercaseKey() {
         when(redisTemplate.opsForZSet()).thenReturn(zSetOperations);
         when(zSetOperations.reverseRange(eq("autocomplete:ja"), ArgumentMatchers.<Range<Long>>any()))
                 .thenReturn(Flux.just("java", "javascript"));
 
-        StepVerifier.create(service.suggest("Ja", 2))
+        StepVerifier.create(service.suggest("  Ja  ", 2))
                 .expectNext(new AutocompleteEntry("java", 0.0))
                 .expectNext(new AutocompleteEntry("javascript", 0.0))
                 .verifyComplete();
 
         verify(zSetOperations).reverseRange(eq("autocomplete:ja"), ArgumentMatchers.<Range<Long>>any());
+    }
+
+    @Test
+    void returnsEmptyFluxForNullPrefix() {
+        StepVerifier.create(service.suggest(null, 5))
+                .verifyComplete();
+
+        verify(redisTemplate, never()).opsForZSet();
     }
 
     @Test

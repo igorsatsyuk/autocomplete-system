@@ -34,6 +34,8 @@ build/
 frontend/node_modules/
 frontend/dist/
 frontend/.angular/
+frontend/out-tsc/
+frontend/coverage/
 
 ### Logs ###
 *.log
