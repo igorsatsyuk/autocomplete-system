@@ -34,8 +34,12 @@ public class RedisSearchUpdater {
             @Value("${autocomplete.redis-prefix:" + RedisKeys.AUTOCOMPLETE_PREFIX + "}") String redisPrefix,
             @Value("${autocomplete.clear-index-timeout:PT5M}") Duration clearIndexTimeout
     ) {
+        String normalizedPrefix = redisPrefix == null ? "" : redisPrefix.trim();
+        if (normalizedPrefix.isEmpty()) {
+            throw new IllegalArgumentException("autocomplete.redis-prefix must not be blank");
+        }
         this.redis = redis;
-        this.redisPrefix = redisPrefix;
+        this.redisPrefix = normalizedPrefix;
         this.clearIndexTimeout = clearIndexTimeout;
     }
 
@@ -89,9 +93,14 @@ public class RedisSearchUpdater {
         String pattern = redisPrefix + "*";
         beginClear();
         try {
-            redis.delete(redis.scan(ScanOptions.scanOptions().match(pattern).count(100).build()))
-                    .doOnSuccess(count -> log.debug("Redis index cleared {} key(s) for pattern '{}'", count, pattern))
-                    .block(clearIndexTimeout);
+            try {
+                redis.delete(redis.scan(ScanOptions.scanOptions().match(pattern).count(100).build()))
+                        .doOnSuccess(count -> log.debug("Redis index cleared {} key(s) for pattern '{}'", count, pattern))
+                        .block(clearIndexTimeout);
+            } catch (RuntimeException ex) {
+                log.error("Failed to clear Redis index for pattern '{}' with timeout {}", pattern, clearIndexTimeout, ex);
+                throw ex;
+            }
         } finally {
             finishClear();
         }

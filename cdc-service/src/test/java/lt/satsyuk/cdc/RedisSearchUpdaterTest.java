@@ -44,6 +44,13 @@ class RedisSearchUpdaterTest {
     }
 
     @Test
+    void rejectsBlankRedisPrefix() {
+        assertThatThrownBy(() -> new RedisSearchUpdater(redis, "   ", Duration.ofSeconds(30)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("autocomplete.redis-prefix");
+    }
+
+    @Test
     void normalizesQueryBeforeWritingRedisPrefixes() {
         when(redis.opsForZSet()).thenReturn(zSetOperations);
         when(zSetOperations.add(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyDouble()))
