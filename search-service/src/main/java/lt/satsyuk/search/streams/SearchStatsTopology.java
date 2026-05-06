@@ -30,7 +30,7 @@ public class SearchStatsTopology {
             @Value("${search.topics.stats:" + KafkaTopics.SEARCH_STATS + "}") String searchStatsTopic,
             @Value("${search.streams.state-store:search-counts-v2}") String stateStoreName,
             @Value("${search.streams.application-id:" + KafkaTopics.SEARCH_STATS + "-app}") String streamsApplicationId,
-            @Value("${spring.kafka.bootstrap-servers:kafka:9092}") String bootstrapServers
+            @Value("${spring.kafka.streams.bootstrap-servers:${spring.kafka.bootstrap-servers:kafka:9092}}") String bootstrapServers
     ) {
         this.repository = repository;
         this.searchEventsTopic = searchEventsTopic;
