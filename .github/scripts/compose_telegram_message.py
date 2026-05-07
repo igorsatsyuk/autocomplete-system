@@ -9,6 +9,10 @@ from pathlib import Path
 
 UNIT_ROOT = Path("test-reports/unit")
 INTEGRATION_ROOT = Path("test-reports/integration")
+SONAR_JOB_PREFIX = "SonarQube - "
+
+FAILURE_STATES = {"failure", "cancelled", "timed_out", "action_required"}
+SUCCESS_STATES = {"success", "skipped", "neutral"}
 
 
 def collect(root: Path, service: str, warnings: list[str]) -> dict[str, int]:
@@ -65,9 +69,8 @@ def fetch_run_jobs(warnings: list[str]) -> list[dict]:
     return payload.get("jobs", [])
 
 
-def discover_services(run_jobs: list[dict]) -> list[str]:
+def _discover_services_from_artifacts() -> set[str]:
     services: set[str] = set()
-
     for root, prefix in (
         (UNIT_ROOT, "unit-test-reports-"),
         (INTEGRATION_ROOT, "integration-test-reports-"),
@@ -77,49 +80,62 @@ def discover_services(run_jobs: list[dict]) -> list[str]:
         for artifact_dir in root.iterdir():
             if artifact_dir.is_dir() and artifact_dir.name.startswith(prefix):
                 services.add(artifact_dir.name[len(prefix):])
+    return services
 
+
+def _discover_service_from_job_name(job_name: str) -> str:
+    for prefix in ("Unit - ", "Integration - ", SONAR_JOB_PREFIX):
+        if job_name.startswith(prefix):
+            return job_name[len(prefix):]
+    return ""
+
+
+def discover_services(run_jobs: list[dict]) -> list[str]:
+    services = _discover_services_from_artifacts()
     for job in run_jobs:
-        name = job.get("name", "")
-        for prefix in ("Unit - ", "Integration - ", "SonarQube - "):
-            if name.startswith(prefix):
-                service = name[len(prefix):]
-                if service != "frontend":
-                    services.add(service)
-
+        service = _discover_service_from_job_name(job.get("name", ""))
+        if service and service != "frontend":
+            services.add(service)
     return sorted(services)
 
 
+def _normalize_conclusion(value: str) -> str:
+    return (value or "unknown").lower()
+
+
+def _analysis_step_conclusion(job: dict) -> str:
+    for step in job.get("steps", []):
+        step_name = step.get("name", "")
+        if step_name in ("SonarQube analysis", "SonarQube analysis (frontend)"):
+            return _normalize_conclusion(step.get("conclusion") or step.get("status") or "")
+    return ""
+
+
+def _normalize_sonar_status(job: dict) -> str:
+    analysis_conclusion = _analysis_step_conclusion(job)
+    if analysis_conclusion == "skipped":
+        return "skipped"
+    if analysis_conclusion == "success":
+        return "success"
+    if analysis_conclusion in FAILURE_STATES:
+        return "failure"
+    return _normalize_conclusion(job.get("conclusion") or job.get("status") or "unknown")
+
+
+def _sonar_service_name(job_name: str) -> str:
+    if job_name == f"{SONAR_JOB_PREFIX}frontend":
+        return "frontend"
+    if job_name.startswith(SONAR_JOB_PREFIX):
+        return job_name.replace(SONAR_JOB_PREFIX, "", 1)
+    return ""
+
+
 def get_sonar_statuses(run_jobs: list[dict], services: list[str]) -> dict[str, str]:
-    statuses = {service: "unknown" for service in services}
-    statuses["frontend"] = "unknown"
-
+    statuses = dict.fromkeys([*services, "frontend"], "unknown")
     for job in run_jobs:
-        name = job.get("name", "")
-        conclusion = job.get("conclusion") or job.get("status") or "unknown"
-
-        analysis_step_conclusion = ""
-        for step in job.get("steps", []):
-            step_name = step.get("name", "")
-            if step_name in ("SonarQube analysis", "SonarQube analysis (frontend)"):
-                analysis_step_conclusion = (step.get("conclusion") or step.get("status") or "").lower()
-                break
-
-        if analysis_step_conclusion == "skipped":
-            normalized = "skipped"
-        elif analysis_step_conclusion == "success":
-            normalized = "success"
-        elif analysis_step_conclusion in ("failure", "cancelled", "timed_out", "action_required"):
-            normalized = "failure"
-        else:
-            normalized = conclusion
-
-        if name == "SonarQube - frontend":
-            statuses["frontend"] = normalized
-        elif name.startswith("SonarQube - "):
-            service = name.replace("SonarQube - ", "", 1)
-            if service in statuses:
-                statuses[service] = normalized
-
+        service = _sonar_service_name(job.get("name", ""))
+        if service and service in statuses:
+            statuses[service] = _normalize_sonar_status(job)
     return statuses
 
 
@@ -158,42 +174,37 @@ def needs_overall_status() -> str:
     ]
     lowered = [r.lower() for r in tracked_results]
 
-    if any(r in ("failure", "cancelled", "timed_out", "action_required") for r in lowered):
+    if any(r in FAILURE_STATES for r in lowered):
         return "failure"
-    if all(r in ("success", "skipped", "neutral") for r in lowered):
+    if all(r in SUCCESS_STATES for r in lowered):
         return "success"
     return "unknown"
+
+
+def _is_relevant_job(name: str) -> bool:
+    if name == "Notify Telegram":
+        return False
+    if name in ("Build common", "Frontend (Angular)", "Docker Build"):
+        return True
+    return name.startswith(("Unit - ", "Integration - ", SONAR_JOB_PREFIX))
 
 
 def workflow_overall_status(run_jobs: list[dict]) -> str:
     if not run_jobs:
         return needs_overall_status()
 
-    relevant_jobs = []
-    for job in run_jobs:
-        name = job.get("name", "")
-        if name == "Notify Telegram":
-            continue
-        if name in ("Build common", "Frontend (Angular)", "Docker Build"):
-            relevant_jobs.append(job)
-            continue
-        if name.startswith(("Unit - ", "Integration - ", "SonarQube - ")):
-            relevant_jobs.append(job)
-
-    if not relevant_jobs:
+    relevant_conclusions = [
+        _normalize_conclusion(job.get("conclusion") or job.get("status") or "unknown")
+        for job in run_jobs
+        if _is_relevant_job(job.get("name", ""))
+    ]
+    if not relevant_conclusions:
         return needs_overall_status()
-
-    for job in relevant_jobs:
-        conclusion = (job.get("conclusion") or job.get("status") or "unknown").lower()
-        if conclusion in ("failure", "cancelled", "timed_out", "action_required"):
-            return "failure"
-
-    for job in relevant_jobs:
-        conclusion = (job.get("conclusion") or job.get("status") or "unknown").lower()
-        if conclusion not in ("success", "skipped", "neutral"):
-            return needs_overall_status()
-
-    return "success"
+    if any(conclusion in FAILURE_STATES for conclusion in relevant_conclusions):
+        return "failure"
+    if all(conclusion in SUCCESS_STATES for conclusion in relevant_conclusions):
+        return "success"
+    return needs_overall_status()
 
 
 def main() -> None:
