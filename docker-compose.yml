@@ -275,7 +275,7 @@ services:
       - autocomplete-service
       - search-service
     ports:
-      - "127.0.0.1:${FRONTEND_PORT:-4200}:80"
+      - "127.0.0.1:${FRONTEND_PORT:-4200}:8080"
     networks:
       - autocomplete-net
 

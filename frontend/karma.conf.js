@@ -1,4 +1,6 @@
-module.exports = function (config) {
+const nodePath = require('node:path');
+
+module.exports = function configureKarma(config) {
   config.set({
     basePath: '',
     frameworks: ['jasmine', '@angular-devkit/build-angular'],
@@ -17,7 +19,7 @@ module.exports = function (config) {
       suppressAll: true
     },
     coverageReporter: {
-      dir: require('path').join(__dirname, './coverage/autocomplete-frontend'),
+      dir: nodePath.join(__dirname, './coverage/autocomplete-frontend'),
       subdir: '.',
       reporters: [
         { type: 'html' },
