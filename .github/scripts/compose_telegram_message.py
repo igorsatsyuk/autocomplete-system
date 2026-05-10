@@ -20,6 +20,7 @@ JOB_RESULT_FIELDS = (
     ("sonarqube", "SONAR_BACKEND_RESULT"),
     ("sonarqube-frontend", "SONAR_FRONTEND_RESULT"),
     ("docker", "DOCKER_RESULT"),
+    ("frontend-e2e-smoke", "FRONTEND_E2E_SMOKE_RESULT"),
 )
 TOTAL_LINE = "- Total: {value}"
 SKIPPED_LINE = "- ⏭️ Skipped: {value}"
@@ -225,6 +226,7 @@ def needs_overall_status() -> str:
         os.environ.get("SONAR_BACKEND_RESULT", "unknown"),
         os.environ.get("SONAR_FRONTEND_RESULT", "unknown"),
         os.environ.get("DOCKER_RESULT", "unknown"),
+        os.environ.get("FRONTEND_E2E_SMOKE_RESULT", "unknown"),
     ]
     lowered = [r.lower() for r in tracked_results]
 
@@ -238,7 +240,7 @@ def needs_overall_status() -> str:
 def _is_relevant_job(name: str) -> bool:
     if name == "Notify Telegram":
         return False
-    if name in ("Build common", "Frontend (Angular)", "Docker Build"):
+    if name in ("Build common", "Frontend (Angular)", "Docker Build", "Frontend E2E Smoke"):
         return True
     return name.startswith(("Unit - ", "Integration - ", SONAR_JOB_PREFIX))
 

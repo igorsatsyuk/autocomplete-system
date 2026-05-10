@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 import { Observable, Subject, of } from 'rxjs';
 
 export interface AutocompleteEntry {
@@ -36,7 +36,9 @@ export class AutocompleteService {
     }
     return this.http.get<AutocompleteEntry[]>(`/api/complete`, {
       params: { q: normalized, limit: 10 }
-    });
+    }).pipe(
+      map(entries => [...entries].sort((a, b) => b.score - a.score))
+    );
   }
 
   sendSearch(q: string): Observable<void> {

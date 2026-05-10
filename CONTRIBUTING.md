@@ -197,12 +197,41 @@ npm run test:ci
 npm run build --if-present
 ```
 
+### Frontend E2E smoke
+
+Verifies the full pipeline end-to-end: seeds search events, waits for Redis prefix index to populate, opens the UI in a headless browser, and asserts suggestions are sorted by score with correct click-through behavior.
+
+Requires Docker Desktop running and `.env` populated (`Copy-Item .env.example .env`).
+
+```powershell
+# Stack must already be up
+Set-Location .\frontend
+npm run test:e2e-smoke
+```
+
+To start the stack, run, and tear down:
+
+```powershell
+docker compose up -d --build
+Set-Location .\frontend
+npm run test:e2e-smoke
+Set-Location ..
+docker compose down -v
+```
+
 ### End-to-end sanity checks
 
 ```powershell
 docker compose logs --tail=100 search-service
 docker compose logs --tail=100 cdc-service
 docker compose exec redis redis-cli ZREVRANGE autocomplete:ja 0 9 WITHSCORES
+```
+
+For a fully automated end-to-end check, use the smoke test:
+
+```powershell
+Set-Location .\frontend
+npm run test:e2e-smoke
 ```
 
 ---
@@ -212,15 +241,16 @@ docker compose exec redis redis-cli ZREVRANGE autocomplete:ja 0 9 WITHSCORES
 1. Create a branch from `main`.
 2. Implement changes with tests.
 3. Run relevant backend/frontend checks locally.
-4. Verify docs/configs are in sync when needed:
+4. Run E2E smoke test if pipeline behavior was affected: `npm run test:e2e-smoke` from `frontend/`.
+5. Verify docs/configs are in sync when needed:
    - migrations + `infra/postgres`
    - `proxy.conf.json` + `nginx.conf`
-5. Open a PR to `main` with:
+6. Open a PR to `main` with:
    - change summary
    - affected pipeline stage(s)
    - test evidence
-6. Address review comments.
-7. Merge after CI passes.
+7. Address review comments.
+8. Merge after CI passes (including `frontend-e2e-smoke` job).
 
 ---
 
@@ -232,6 +262,7 @@ docker compose exec redis redis-cli ZREVRANGE autocomplete:ja 0 9 WITHSCORES
 - [ ] Debezium parsing uses envelope (`payload.after`)
 - [ ] Schema changes mirrored in both migration locations
 - [ ] Relevant unit/integration/frontend tests are updated
+- [ ] E2E smoke passes locally (`npm run test:e2e-smoke`) if pipeline behavior changed
 - [ ] `frontend/proxy.conf.json` and `frontend/nginx.conf` are aligned (if routes changed)
 - [ ] No secrets committed; logs/examples are redacted
 - [ ] Commit messages follow Conventional Commits

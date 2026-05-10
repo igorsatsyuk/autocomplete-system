@@ -1,5 +1,7 @@
 package lt.satsyuk.autocomplete.integration;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -51,9 +53,37 @@ class AutocompleteServiceRedisIT {
             HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
             assertThat(response.statusCode()).isEqualTo(200);
             assertThat(response.body()).contains("\"query\":\"java\"");
+            assertThat(response.body()).contains("\"score\":5.0");
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Test
+    void completeReturnsStrictJsonContract() throws Exception {
+        try (Jedis jedis = new Jedis(redis.getHost(), redis.getMappedPort(6379))) {
+            jedis.zadd("autocomplete:ja", 5.0d, "java");
+            jedis.zadd("autocomplete:ja", 3.0d, "javascript");
+        }
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/api/complete?q=ja&limit=2"))
+                .GET()
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        JsonNode actual = objectMapper.readTree(response.body());
+        JsonNode expected = objectMapper.readTree("""
+                [
+                  {"query":"java","score":5.0},
+                  {"query":"javascript","score":3.0}
+                ]
+                """);
+
+        assertThat(actual).isEqualTo(expected);
     }
 }
 

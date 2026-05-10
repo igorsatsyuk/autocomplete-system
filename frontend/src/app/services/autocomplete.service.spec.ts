@@ -59,6 +59,23 @@ describe('AutocompleteService', () => {
       req.flush(mockEntries);
     });
 
+    it('sorts suggestions by score descending on the client', () => {
+      const backendOrder: AutocompleteEntry[] = [
+        { query: 'javascript', score: 3 },
+        { query: 'java', score: 5 }
+      ];
+
+      service.fetchSuggestions('ja').subscribe(entries => {
+        expect(entries).toEqual([
+          { query: 'java', score: 5 },
+          { query: 'javascript', score: 3 }
+        ]);
+      });
+
+      const req = http.expectOne(r => r.url === '/api/complete');
+      req.flush(backendOrder);
+    });
+
     it('trims and lowercases query before sending HTTP request', () => {
       const mockEntries: AutocompleteEntry[] = [{ query: 'java', score: 5 }];
 

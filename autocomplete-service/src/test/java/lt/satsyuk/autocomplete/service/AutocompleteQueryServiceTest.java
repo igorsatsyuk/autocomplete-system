@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.DefaultTypedTuple;
 import org.springframework.data.domain.Range;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.ReactiveZSetOperations;
@@ -37,15 +38,18 @@ class AutocompleteQueryServiceTest {
     @Test
     void returnsSuggestionsFromConfiguredRedisPrefixWithTrimmedLowercaseKey() {
         when(redisTemplate.opsForZSet()).thenReturn(zSetOperations);
-        when(zSetOperations.reverseRange(eq("autocomplete:ja"), ArgumentMatchers.<Range<Long>>any()))
-                .thenReturn(Flux.just("java", "javascript"));
+        when(zSetOperations.reverseRangeWithScores(eq("autocomplete:ja"), ArgumentMatchers.<Range<Long>>any()))
+                .thenReturn(Flux.just(
+                        new DefaultTypedTuple<>("java", 7.0),
+                        new DefaultTypedTuple<>("javascript", 3.0)
+                ));
 
         StepVerifier.create(service.suggest("  Ja  ", 2))
-                .expectNext(new AutocompleteEntry("java", 0.0))
-                .expectNext(new AutocompleteEntry("javascript", 0.0))
+                .expectNext(new AutocompleteEntry("java", 7.0))
+                .expectNext(new AutocompleteEntry("javascript", 3.0))
                 .verifyComplete();
 
-        verify(zSetOperations).reverseRange(eq("autocomplete:ja"), ArgumentMatchers.<Range<Long>>any());
+        verify(zSetOperations).reverseRangeWithScores(eq("autocomplete:ja"), ArgumentMatchers.<Range<Long>>any());
     }
 
     @Test
