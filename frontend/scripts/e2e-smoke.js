@@ -45,19 +45,22 @@ async function sendSearch(query) {
   let lastStatus = 'unknown';
 
   while (Date.now() < deadline) {
+    let response;
     try {
-      const response = await fetch(buildUrl(`/api/search?q=${encodeURIComponent(query)}`));
-      if (response.ok) {
-        return;
-      }
-      lastStatus = response.status;
-      if (!RETRIABLE_STATUS_CODES.has(response.status)) {
-        throw new Error(`Search request failed for '${query}': HTTP ${response.status}`);
-      }
-    } catch (error) {
-      if (Date.now() >= deadline) {
-        throw error;
-      }
+      response = await fetch(buildUrl(`/api/search?q=${encodeURIComponent(query)}`));
+    } catch {
+      lastStatus = 'network-error';
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      continue;
+    }
+
+    if (response.ok) {
+      return;
+    }
+
+    lastStatus = response.status;
+    if (!RETRIABLE_STATUS_CODES.has(response.status)) {
+      throw new Error(`Search request failed for '${query}': HTTP ${response.status}`);
     }
 
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
@@ -67,18 +70,21 @@ async function sendSearch(query) {
 }
 
 async function fetchSuggestions(prefix) {
+  let response;
   try {
-    const response = await fetch(buildUrl(`/api/complete?q=${encodeURIComponent(prefix)}&limit=10`));
-    if (!response.ok) {
-      if (RETRIABLE_STATUS_CODES.has(response.status)) {
-        return null;
-      }
-      throw new Error(`Autocomplete request failed for '${prefix}': HTTP ${response.status}`);
-    }
-    return response.json();
+    response = await fetch(buildUrl(`/api/complete?q=${encodeURIComponent(prefix)}&limit=10`));
   } catch {
     return null;
   }
+
+  if (!response.ok) {
+    if (RETRIABLE_STATUS_CODES.has(response.status)) {
+      return null;
+    }
+    throw new Error(`Autocomplete request failed for '${prefix}': HTTP ${response.status}`);
+  }
+
+  return response.json();
 }
 
 async function waitForSuggestions(prefix, requiredQueries) {

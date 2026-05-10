@@ -302,7 +302,7 @@ GitHub Actions workflow: `.github/workflows/ci.yml` runs on every push to `main`
    - Runs after backend-unit, backend-integration, and frontend complete.
 
 8. **frontend-e2e-smoke**
-   - Runs after the `docker` job; requires Docker Compose.
+   - Runs after the `frontend` job; requires Docker Compose.
    - Starts the full stack (`docker compose up -d --build`), waits for `http://localhost:4200`.
    - Runs `npm run test:e2e-smoke` from `frontend/` — seeds search events, polls autocomplete API, verifies UI renders suggestions sorted by score and click-through works.
    - Dumps compose logs on failure; always tears down with `docker compose down -v`.

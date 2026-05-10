@@ -76,6 +76,23 @@ describe('AutocompleteService', () => {
       req.flush(backendOrder);
     });
 
+    it('uses query as a tie-breaker when scores are equal', () => {
+      const backendOrder: AutocompleteEntry[] = [
+        { query: 'javascript', score: 5 },
+        { query: 'java', score: 5 }
+      ];
+
+      service.fetchSuggestions('ja').subscribe(entries => {
+        expect(entries).toEqual([
+          { query: 'java', score: 5 },
+          { query: 'javascript', score: 5 }
+        ]);
+      });
+
+      const req = http.expectOne(r => r.url === '/api/complete');
+      req.flush(backendOrder);
+    });
+
     it('trims and lowercases query before sending HTTP request', () => {
       const mockEntries: AutocompleteEntry[] = [{ query: 'java', score: 5 }];
 

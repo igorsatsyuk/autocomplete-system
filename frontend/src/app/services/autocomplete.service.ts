@@ -37,7 +37,7 @@ export class AutocompleteService {
     return this.http.get<AutocompleteEntry[]>(`/api/complete`, {
       params: { q: normalized, limit: 10 }
     }).pipe(
-      map(entries => [...entries].sort((a, b) => b.score - a.score))
+      map(entries => [...entries].sort((a, b) => (b.score - a.score) || a.query.localeCompare(b.query)))
     );
   }
 
