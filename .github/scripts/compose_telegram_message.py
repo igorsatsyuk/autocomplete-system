@@ -21,6 +21,8 @@ JOB_RESULT_FIELDS = (
     ("sonarqube-frontend", "SONAR_FRONTEND_RESULT"),
     ("docker", "DOCKER_RESULT"),
 )
+TOTAL_LINE = "- Total: {value}"
+SKIPPED_LINE = "- ⏭️ Skipped: {value}"
 
 
 def collect(root: Path, service: str, warnings: list[str]) -> dict[str, int]:
@@ -198,6 +200,23 @@ def overall_status_line(status: str) -> str:
     return line
 
 
+def positive_count_lines(entries: list[tuple[str, int, bool]]) -> list[str]:
+    lines: list[str] = []
+    for template, value, highlight in entries:
+        if value <= 0:
+            continue
+        line = template.format(value=value)
+        lines.append(emphasize(line, highlight))
+    return lines
+
+
+def metric_section(title: str, entries: list[tuple[str, int, bool]]) -> list[str]:
+    count_lines = positive_count_lines(entries)
+    if not count_lines:
+        return []
+    return [title, *count_lines]
+
+
 def needs_overall_status() -> str:
     tracked_results = [
         os.environ.get("BACKEND_UNIT_RESULT", "unknown"),
@@ -242,6 +261,65 @@ def workflow_overall_status(run_jobs: list[dict]) -> str:
     return needs_overall_status()
 
 
+def append_sonar_checks(lines: list[str], services: list[str], sonar_statuses: dict[str, str]) -> None:
+    lines.append("")
+    lines.append("<b>SonarQube checks</b>")
+    for service in services + ["frontend"]:
+        counts = sonar_counts(sonar_statuses.get(service, "unknown"))
+        sonar_lines = positive_count_lines(
+            [
+                ("- ✅ Success: {value}", counts["success"], False),
+                ("- ❌ Failure: {value}", counts["failure"], True),
+                (SKIPPED_LINE, counts["skipped"], False),
+                ("- ❓ Unknown: {value}", counts["unknown"], False),
+            ]
+        )
+        if not sonar_lines:
+            continue
+        lines.append("")
+        lines.append(f"<b>{esc(service)}</b>")
+        lines.extend(sonar_lines)
+
+
+def append_test_sections(lines: list[str], services: list[str], warnings: list[str]) -> None:
+    for service in services:
+        unit = collect(UNIT_ROOT, service, warnings)
+        unit_passed = max(unit["total"] - unit["failed"] - unit["skipped"], 0)
+        integration = collect(INTEGRATION_ROOT, service, warnings)
+        integration_passed = max(integration["total"] - integration["failed"] - integration["skipped"], 0)
+
+        unit_section = metric_section(
+            "Unit Tests",
+            [
+                (TOTAL_LINE, unit["total"], False),
+                ("- ✅ Passed: {value}", unit_passed, False),
+                ("- ❌ Failed: {value}", unit["failed"], True),
+                (SKIPPED_LINE, unit["skipped"], False),
+            ],
+        )
+        integration_section = metric_section(
+            "Integration Tests",
+            [
+                (TOTAL_LINE, integration["total"], False),
+                ("- ✅ Passed: {value}", integration_passed, False),
+                ("- ❌ Failed: {value}", integration["failed"], True),
+                (SKIPPED_LINE, integration["skipped"], False),
+            ],
+        )
+
+        if not unit_section and not integration_section:
+            continue
+
+        lines.append("")
+        lines.append(f"<b>{esc(service)}</b>")
+        if unit_section:
+            lines.append("")
+            lines.extend(unit_section)
+        if integration_section:
+            lines.append("")
+            lines.extend(integration_section)
+
+
 def main() -> None:
     warnings: list[str] = []
 
@@ -264,39 +342,8 @@ def main() -> None:
         lines.append(job_result_line(job_name, os.environ.get(env_name, "unknown")))
 
     sonar_statuses = get_sonar_statuses(run_jobs, services)
-
-    lines.append("")
-    lines.append("<b>SonarQube checks</b>")
-    for service in services + ["frontend"]:
-        counts = sonar_counts(sonar_statuses.get(service, "unknown"))
-        lines.append("")
-        lines.append(f"<b>{esc(service)}</b>")
-        lines.append(f"- Total: {counts['total']}")
-        lines.append(f"- ✅ Success: {counts['success']}")
-        lines.append(emphasize(f"- ❌ Failure: {counts['failure']}", counts["failure"] > 0))
-        lines.append(f"- ⏭️ Skipped: {counts['skipped']}")
-        lines.append(f"- ❓ Unknown: {counts['unknown']}")
-
-    for service in services:
-        unit = collect(UNIT_ROOT, service, warnings)
-        unit_passed = max(unit["total"] - unit["failed"] - unit["skipped"], 0)
-        integration = collect(INTEGRATION_ROOT, service, warnings)
-        integration_passed = max(integration["total"] - integration["failed"] - integration["skipped"], 0)
-
-        lines.append("")
-        lines.append(f"<b>{esc(service)}</b>")
-        lines.append("")
-        lines.append("Unit Tests")
-        lines.append(f"- Total: {unit['total']}")
-        lines.append(f"- ✅ Passed: {unit_passed}")
-        lines.append(emphasize(f"- ❌ Failed: {unit['failed']}", unit["failed"] > 0))
-        lines.append(f"- ⏭️ Skipped: {unit['skipped']}")
-        lines.append("")
-        lines.append("Integration Tests")
-        lines.append(f"- Total: {integration['total']}")
-        lines.append(f"- ✅ Passed: {integration_passed}")
-        lines.append(emphasize(f"- ❌ Failed: {integration['failed']}", integration["failed"] > 0))
-        lines.append(f"- ⏭️ Skipped: {integration['skipped']}")
+    append_sonar_checks(lines, services, sonar_statuses)
+    append_test_sections(lines, services, warnings)
 
     if warnings:
         lines.append("")
