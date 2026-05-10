@@ -13,6 +13,14 @@ SONAR_JOB_PREFIX = "SonarQube - "
 
 FAILURE_STATES = {"failure", "cancelled", "timed_out", "action_required"}
 SUCCESS_STATES = {"success", "skipped", "neutral"}
+JOB_RESULT_FIELDS = (
+    ("backend-unit", "BACKEND_UNIT_RESULT"),
+    ("backend-integration", "BACKEND_INT_RESULT"),
+    ("frontend", "FRONTEND_RESULT"),
+    ("sonarqube", "SONAR_BACKEND_RESULT"),
+    ("sonarqube-frontend", "SONAR_FRONTEND_RESULT"),
+    ("docker", "DOCKER_RESULT"),
+)
 
 
 def collect(root: Path, service: str, warnings: list[str]) -> dict[str, int]:
@@ -144,9 +152,9 @@ def sonar_counts(status: str) -> dict[str, int]:
     counts = {"total": 1, "success": 0, "failure": 0, "skipped": 0, "unknown": 0}
     if s == "success":
         counts["success"] = 1
-    elif s in ("failure", "cancelled", "timed_out", "action_required"):
+    elif s in FAILURE_STATES:
         counts["failure"] = 1
-    elif s in ("skipped", "neutral"):
+    elif s in SUCCESS_STATES:
         counts["skipped"] = 1
     else:
         counts["unknown"] = 1
@@ -161,6 +169,33 @@ def emphasize(text: str, enabled: bool) -> str:
     if not enabled:
         return text
     return f"<b>⚠️ {text}</b>"
+
+
+def status_presentation(status: str) -> tuple[str, bool]:
+    normalized = _normalize_conclusion(status)
+    if normalized == "success":
+        return "✅", False
+    if normalized in FAILURE_STATES:
+        return "❌", True
+    if normalized in ("skipped", "neutral"):
+        return "⏭️", False
+    return "❓", False
+
+
+def job_result_line(name: str, status: str) -> str:
+    normalized = _normalize_conclusion(status)
+    icon, is_failure = status_presentation(normalized)
+    line = f"- {icon} {name}: {esc(normalized)}"
+    return emphasize(line, is_failure)
+
+
+def overall_status_line(status: str) -> str:
+    normalized = _normalize_conclusion(status)
+    icon, is_failure = status_presentation(normalized)
+    line = f"{icon} <b>Status:</b> {esc(normalized)}"
+    if is_failure:
+        return f"⚠️ {line}"
+    return line
 
 
 def needs_overall_status() -> str:
@@ -218,22 +253,15 @@ def main() -> None:
     lines: list[str] = []
     lines.append("autocomplete-system CI finished")
     lines.append("")
-    status_line = f"<b>Status:</b> {esc(overall_status)}"
-    if overall_status == "failure":
-        status_line = f"⚠️ {status_line}"
-    lines.append(status_line)
+    lines.append(overall_status_line(overall_status))
     lines.append(f"<b>Branch:</b> {esc(os.environ.get('GITHUB_REF_NAME', ''))}")
     lines.append(f"<b>Commit:</b> {esc(os.environ.get('GITHUB_SHA', ''))}")
     lines.append(f"<b>Actor:</b> {esc(os.environ.get('GITHUB_ACTOR', ''))}")
     lines.append(f"<b>Workflow:</b> {esc(os.environ.get('GITHUB_WORKFLOW', ''))}")
     lines.append("")
     lines.append("<b>Job results</b>")
-    lines.append(f"- backend-unit: {esc(os.environ.get('BACKEND_UNIT_RESULT', 'unknown'))}")
-    lines.append(f"- backend-integration: {esc(os.environ.get('BACKEND_INT_RESULT', 'unknown'))}")
-    lines.append(f"- frontend: {esc(os.environ.get('FRONTEND_RESULT', 'unknown'))}")
-    lines.append(f"- sonarqube: {esc(os.environ.get('SONAR_BACKEND_RESULT', 'unknown'))}")
-    lines.append(f"- sonarqube-frontend: {esc(os.environ.get('SONAR_FRONTEND_RESULT', 'unknown'))}")
-    lines.append(f"- docker: {esc(os.environ.get('DOCKER_RESULT', 'unknown'))}")
+    for job_name, env_name in JOB_RESULT_FIELDS:
+        lines.append(job_result_line(job_name, os.environ.get(env_name, "unknown")))
 
     sonar_statuses = get_sonar_statuses(run_jobs, services)
 
