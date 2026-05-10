@@ -203,7 +203,6 @@ Known backend test classes:
 - `search-service`: `SearchControllerTest`, `SearchEventProducerTest`, `SearchStatsTopologyTest`, `SearchServiceKafkaIT`
 - `cdc-service`: `DebeziumConsumerTest`, `CdcServiceRedisIT`
 - `autocomplete-service`: `AutocompleteQueryServiceTest`, `AutocompleteServiceRedisIT`
-- `frontend`: `AutocompleteQueryServiceTest` (unit), `AutocompleteServiceRedisIT` (integration), `e2e-smoke.js` (E2E smoke)
 
 ### Frontend Tests
 
@@ -223,9 +222,13 @@ npm run test
 npm run build
 ```
 
+Frontend test references:
+- Unit tests: `frontend/src/app/**/*.spec.ts`
+- E2E smoke script: `frontend/scripts/e2e-smoke.js`
+
 ### Frontend E2E Smoke Test
 
-End-to-end smoke test that starts the full pipeline (Docker Compose), seeds search events, and verifies autocomplete suggestions are served and sorted by score in the browser UI.
+End-to-end smoke test that validates the full pipeline (search -> Kafka/CDC -> Redis -> autocomplete API -> UI). The script itself assumes the stack is already running.
 
 **Prerequisites:** Docker Desktop running, `.env` populated (copy from `.env.example`).
 
@@ -246,8 +249,8 @@ docker compose down -v
 
 The script (`frontend/scripts/e2e-smoke.js`):
 - Seeds unique search queries via `/api/search`.
-- Polls `/api/complete` until suggestions appear (up to 30 s).
-- Opens the UI in headless Chrome, types the prefix, asserts suggestions are ordered by descending score.
+- Polls `/api/complete` until suggestions appear (up to 180 s) to tolerate fresh-stack warm-up.
+- Opens the UI in Playwright headless Chromium, types the prefix, asserts suggestions are ordered by descending score.
 - Clicks the top suggestion and verifies it is copied to the input field.
 
 `FRONTEND_URL` environment variable overrides the default `http://localhost:4200`:
