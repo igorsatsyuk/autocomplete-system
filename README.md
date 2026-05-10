@@ -248,6 +248,7 @@ docker compose down -v
 ```
 
 The script (`frontend/scripts/e2e-smoke.js`):
+- Waits for Debezium connector readiness (`RUNNING`) before seeding events.
 - Seeds unique search queries via `/api/search`.
 - Polls `/api/complete` until suggestions appear (up to 180 s) to tolerate fresh-stack warm-up.
 - Opens the UI in Playwright headless Chromium, types the prefix, asserts suggestions are ordered by descending score.
@@ -257,6 +258,12 @@ The script (`frontend/scripts/e2e-smoke.js`):
 
 ```powershell
 $env:FRONTEND_URL = "http://localhost:4200"; npm run test:e2e-smoke
+```
+
+`DEBEZIUM_STATUS_URL` can override the default connector status endpoint (`http://localhost:8083/connectors/postgres-connector/status`):
+
+```powershell
+$env:DEBEZIUM_STATUS_URL = "http://localhost:8083/connectors/postgres-connector/status"; npm run test:e2e-smoke
 ```
 
 ## CI Pipeline

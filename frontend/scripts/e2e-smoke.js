@@ -2,12 +2,42 @@ const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:4200';
+const DEBEZIUM_STATUS_URL =
+  process.env.DEBEZIUM_STATUS_URL || 'http://localhost:8083/connectors/postgres-connector/status';
 const POLL_TIMEOUT_MS = 180000;
 const POLL_INTERVAL_MS = 2000;
 const RETRIABLE_STATUS_CODES = new Set([502, 503, 504]);
 
 function buildUrl(path) {
   return new URL(path, FRONTEND_URL).toString();
+}
+
+async function waitForDebeziumConnector() {
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(DEBEZIUM_STATUS_URL);
+      if (!response.ok) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        continue;
+      }
+
+      const payload = await response.json();
+      const connectorState = payload?.connector?.state;
+      const hasRunningTask = Array.isArray(payload?.tasks) && payload.tasks.some((task) => task?.state === 'RUNNING');
+
+      if (connectorState === 'RUNNING' && hasRunningTask) {
+        return;
+      }
+    } catch {
+      // Connector may still be bootstrapping; keep polling.
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  }
+
+  throw new Error(`Timed out waiting for Debezium connector readiness: ${DEBEZIUM_STATUS_URL}`);
 }
 
 async function sendSearch(query) {
@@ -79,6 +109,8 @@ async function run() {
   const topQuery = `e2esmoke${runId}java`;
   const secondQuery = `e2esmoke${runId}javascript`;
   const prefix = `e2esmoke${runId}ja`;
+
+  await waitForDebeziumConnector();
 
   await sendSearch(topQuery);
   await sendSearch(topQuery);
