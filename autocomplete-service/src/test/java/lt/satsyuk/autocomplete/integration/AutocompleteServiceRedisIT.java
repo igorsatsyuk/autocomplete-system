@@ -1,5 +1,7 @@
 package lt.satsyuk.autocomplete.integration;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -22,6 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class AutocompleteServiceRedisIT {
 
+    private static final String AUTOCOMPLETE_KEY = "autocomplete:ja";
+
     @Container
     static final GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7.2-alpine"))
             .withExposedPorts(6379);
@@ -39,7 +43,8 @@ class AutocompleteServiceRedisIT {
     @Test
     void completeReturnsEntriesFromRedisSortedSet() {
         try (Jedis jedis = new Jedis(redis.getHost(), redis.getMappedPort(6379))) {
-            jedis.zadd("autocomplete:ja", 5.0d, "java");
+            jedis.del(AUTOCOMPLETE_KEY);
+            jedis.zadd(AUTOCOMPLETE_KEY, 5.0d, "java");
         }
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -51,9 +56,38 @@ class AutocompleteServiceRedisIT {
             HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
             assertThat(response.statusCode()).isEqualTo(200);
             assertThat(response.body()).contains("\"query\":\"java\"");
+            assertThat(response.body()).contains("\"score\":5.0");
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Test
+    void completeReturnsStrictJsonContract() throws Exception {
+        try (Jedis jedis = new Jedis(redis.getHost(), redis.getMappedPort(6379))) {
+            jedis.del(AUTOCOMPLETE_KEY);
+            jedis.zadd(AUTOCOMPLETE_KEY, 5.0d, "java");
+            jedis.zadd(AUTOCOMPLETE_KEY, 3.0d, "javascript");
+        }
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/api/complete?q=ja&limit=2"))
+                .GET()
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        JsonNode actual = objectMapper.readTree(response.body());
+        JsonNode expected = objectMapper.readTree("""
+                [
+                  {"query":"java","score":5.0},
+                  {"query":"javascript","score":3.0}
+                ]
+                """);
+
+        assertThat(actual).isEqualTo(expected);
     }
 }
 

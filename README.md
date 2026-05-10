@@ -222,6 +222,51 @@ npm run test
 npm run build
 ```
 
+Frontend test references:
+- Unit tests: `frontend/src/app/**/*.spec.ts`
+- E2E smoke script: `frontend/scripts/e2e-smoke.js`
+
+### Frontend E2E Smoke Test
+
+End-to-end smoke test that validates the full pipeline (search -> Kafka/CDC -> Redis -> autocomplete API -> UI). The script itself assumes the stack is already running.
+
+**Prerequisites:** Docker Desktop running, `.env` populated (copy from `.env.example`).
+
+```powershell
+# One-command local run (requires the stack to already be up)
+Set-Location .\frontend
+npm run test:e2e-smoke
+```
+
+To start the stack first and then run the test:
+
+```powershell
+docker compose up -d --build
+Set-Location .\frontend
+npm run test:e2e-smoke
+Set-Location ..
+docker compose down -v
+```
+
+The script (`frontend/scripts/e2e-smoke.js`):
+- Waits for Debezium connector readiness (`RUNNING`) before seeding events.
+- Seeds unique search queries via `/api/search`.
+- Polls `/api/complete` until suggestions appear (up to 180 s) to tolerate fresh-stack warm-up.
+- Opens the UI in Playwright headless Chromium, types the prefix, asserts seeded suggestions are rendered in descending score order.
+- Clicks the top suggestion and verifies it is copied to the input field.
+
+`FRONTEND_URL` environment variable overrides the default `http://localhost:4200`:
+
+```powershell
+$env:FRONTEND_URL = "http://localhost:4200"; npm run test:e2e-smoke
+```
+
+`DEBEZIUM_STATUS_URL` can override the default connector status endpoint (`http://localhost:8083/connectors/postgres-connector/status`):
+
+```powershell
+$env:DEBEZIUM_STATUS_URL = "http://localhost:8083/connectors/postgres-connector/status"; npm run test:e2e-smoke
+```
+
 ## CI Pipeline
 
 GitHub Actions workflow: `.github/workflows/ci.yml` runs on every push to `main` and on pull requests.
@@ -257,8 +302,14 @@ GitHub Actions workflow: `.github/workflows/ci.yml` runs on every push to `main`
    - Does not push; useful for validating builds on PRs.
    - Runs after backend-unit, backend-integration, and frontend complete.
 
-8. **notify-telegram** (final stage)
-   - Sends a Telegram notification with overall CI status.
+8. **frontend-e2e-smoke**
+   - Runs after the `frontend` job; requires Docker Compose.
+   - Starts the full stack (`docker compose up -d --build`), waits for `http://localhost:4200`.
+   - Runs `npm run test:e2e-smoke` from `frontend/` — seeds search events, polls autocomplete API, verifies seeded suggestions order by score and click-through behavior.
+   - Dumps compose logs on failure; always tears down with `docker compose down -v`.
+
+9. **notify-telegram** (final stage)
+   - Sends a Telegram notification with overall CI status including `frontend-e2e-smoke` result.
    - Requires `TELEGRAM_TO` and `TELEGRAM_TOKEN` secrets; skips silently if unavailable.
    - Runs after all other jobs, regardless of their result.
 
@@ -421,8 +472,9 @@ docker compose exec kafka kafka-topics --bootstrap-server kafka:9092 --list
 
 1. Run backend unit tests: `mvn -B test` from each service directory.
 2. Run frontend tests: `npm run test:ci` from `frontend/`.
-3. Verify build: `docker compose build` (or individual `docker build` commands).
-4. Check code formatting via SonarQube locally if possible, or rely on CI feedback.
+3. Run E2E smoke test if pipeline behavior was affected: `npm run test:e2e-smoke` from `frontend/` (requires stack to be up).
+4. Verify build: `docker compose build` (or individual `docker build` commands).
+5. Check code formatting via SonarQube locally if possible, or rely on CI feedback.
 
 ### Operational Checklist
 

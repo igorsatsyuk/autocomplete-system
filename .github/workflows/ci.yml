@@ -452,11 +452,69 @@ jobs:
       - name: Build frontend image
         run: docker build -f frontend/Dockerfile -t frontend:ci frontend
 
-  # --- 8. Telegram notification -------------------------------------------------
+  # --- 8. Frontend E2E smoke (docker compose) -----------------------------------
+  frontend-e2e-smoke:
+    name: Frontend E2E Smoke
+    runs-on: ubuntu-latest
+    needs: [frontend]
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Use Node 20
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --ignore-scripts
+
+      - name: Install Playwright Chromium deps
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Prepare .env for Compose
+        run: cp .env.example .env
+
+      - name: Start stack for E2E smoke
+        run: docker compose up -d --build
+
+      - name: Wait for frontend endpoint
+        shell: bash
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost:4200 > /dev/null; then
+              echo "Frontend is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Frontend did not become ready in time"
+          exit 1
+
+      - name: Run frontend E2E smoke
+        working-directory: frontend
+        run: npm run test:e2e-smoke
+
+      - name: Dump compose logs on failure
+        if: failure()
+        run: docker compose logs --tail=200
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v
+
+  # --- 9. Telegram notification -------------------------------------------------
   notify-telegram:
     name: Notify Telegram
     runs-on: ubuntu-latest
-    needs: [backend-unit, backend-integration, frontend, sonarqube, sonarqube-frontend, docker]
+    needs: [backend-unit, backend-integration, frontend, sonarqube, sonarqube-frontend, docker, frontend-e2e-smoke]
     if: ${{ always() }}
     env:
       TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
@@ -496,6 +554,7 @@ jobs:
           SONAR_BACKEND_RESULT: ${{ needs.sonarqube.result }}
           SONAR_FRONTEND_RESULT: ${{ needs.sonarqube-frontend.result }}
           DOCKER_RESULT: ${{ needs.docker.result }}
+          FRONTEND_E2E_SMOKE_RESULT: ${{ needs.frontend-e2e-smoke.result }}
 
       - name: Notify Telegram
         if: ${{ env.TELEGRAM_TO != '' && env.TELEGRAM_TOKEN != '' }}

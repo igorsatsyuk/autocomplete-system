@@ -41,8 +41,9 @@ public class AutocompleteQueryService {
 
         Range<Long> range = Range.closed(0L, (long) limit - 1);
         return redisTemplate.opsForZSet()
-                .reverseRange(redisPrefix + normalizedPrefix, range)
-                .map(q -> new AutocompleteEntry(q, 0.0));
+                .reverseRangeWithScores(redisPrefix + normalizedPrefix, range)
+                .filter(tuple -> tuple.getValue() != null)
+                .map(tuple -> new AutocompleteEntry(tuple.getValue(), tuple.getScore() == null ? 0.0 : tuple.getScore()));
     }
 
     private static String normalizePrefix(String raw) {
