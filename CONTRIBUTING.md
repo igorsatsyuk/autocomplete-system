@@ -199,7 +199,7 @@ npm run build --if-present
 
 ### Frontend E2E smoke
 
-Verifies the full pipeline end-to-end: seeds search events, waits for Redis prefix index to populate, opens the UI in a headless browser, and asserts suggestions are sorted by score with correct click-through behavior.
+Verifies the full pipeline end-to-end: seeds search events, waits for Redis prefix index to populate, opens the UI in a headless browser, and asserts seeded suggestions order by score with correct click-through behavior.
 
 Requires Docker Desktop running and `.env` populated (`Copy-Item .env.example .env`).
 

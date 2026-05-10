@@ -24,6 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class AutocompleteServiceRedisIT {
 
+    private static final String AUTOCOMPLETE_KEY = "autocomplete:ja";
+
     @Container
     static final GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7.2-alpine"))
             .withExposedPorts(6379);
@@ -41,7 +43,8 @@ class AutocompleteServiceRedisIT {
     @Test
     void completeReturnsEntriesFromRedisSortedSet() {
         try (Jedis jedis = new Jedis(redis.getHost(), redis.getMappedPort(6379))) {
-            jedis.zadd("autocomplete:ja", 5.0d, "java");
+            jedis.del(AUTOCOMPLETE_KEY);
+            jedis.zadd(AUTOCOMPLETE_KEY, 5.0d, "java");
         }
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -62,8 +65,9 @@ class AutocompleteServiceRedisIT {
     @Test
     void completeReturnsStrictJsonContract() throws Exception {
         try (Jedis jedis = new Jedis(redis.getHost(), redis.getMappedPort(6379))) {
-            jedis.zadd("autocomplete:ja", 5.0d, "java");
-            jedis.zadd("autocomplete:ja", 3.0d, "javascript");
+            jedis.del(AUTOCOMPLETE_KEY);
+            jedis.zadd(AUTOCOMPLETE_KEY, 5.0d, "java");
+            jedis.zadd(AUTOCOMPLETE_KEY, 3.0d, "javascript");
         }
 
         HttpRequest request = HttpRequest.newBuilder()

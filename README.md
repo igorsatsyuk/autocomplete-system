@@ -252,7 +252,7 @@ The script (`frontend/scripts/e2e-smoke.js`):
 - Waits for Debezium connector readiness (`RUNNING`) before seeding events.
 - Seeds unique search queries via `/api/search`.
 - Polls `/api/complete` until suggestions appear (up to 180 s) to tolerate fresh-stack warm-up.
-- Opens the UI in Playwright headless Chromium, types the prefix, asserts suggestions are ordered by descending score.
+- Opens the UI in Playwright headless Chromium, types the prefix, asserts seeded suggestions are rendered in descending score order.
 - Clicks the top suggestion and verifies it is copied to the input field.
 
 `FRONTEND_URL` environment variable overrides the default `http://localhost:4200`:
@@ -305,7 +305,7 @@ GitHub Actions workflow: `.github/workflows/ci.yml` runs on every push to `main`
 8. **frontend-e2e-smoke**
    - Runs after the `frontend` job; requires Docker Compose.
    - Starts the full stack (`docker compose up -d --build`), waits for `http://localhost:4200`.
-   - Runs `npm run test:e2e-smoke` from `frontend/` — seeds search events, polls autocomplete API, verifies UI renders suggestions sorted by score and click-through works.
+   - Runs `npm run test:e2e-smoke` from `frontend/` — seeds search events, polls autocomplete API, verifies seeded suggestions order by score and click-through behavior.
    - Dumps compose logs on failure; always tears down with `docker compose down -v`.
 
 9. **notify-telegram** (final stage)
