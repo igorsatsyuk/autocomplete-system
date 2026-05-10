@@ -244,6 +244,7 @@ To start the stack first and then run the test:
 docker compose up -d --build
 Set-Location .\frontend
 npm run test:e2e-smoke
+Set-Location ..
 docker compose down -v
 ```
 
