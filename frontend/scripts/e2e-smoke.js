@@ -69,6 +69,13 @@ async function sendSearch(query) {
   throw new Error(`Search request timed out for '${query}'. Last status: ${lastStatus}`);
 }
 
+async function seedSearches(topQuery, secondQuery) {
+  await sendSearch(topQuery);
+  await sendSearch(topQuery);
+  await sendSearch(topQuery);
+  await sendSearch(secondQuery);
+}
+
 async function fetchSuggestions(prefix) {
   let response;
   try {
@@ -87,13 +94,18 @@ async function fetchSuggestions(prefix) {
   return response.json();
 }
 
-async function waitForSuggestions(prefix, requiredQueries) {
+async function waitForSuggestions(prefix, requiredQueries, refreshSearches) {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   let lastEntries = [];
+  let attempts = 0;
 
   while (Date.now() < deadline) {
     lastEntries = await fetchSuggestions(prefix);
     if (!Array.isArray(lastEntries)) {
+      attempts += 1;
+      if (refreshSearches && attempts % 5 === 0) {
+        await refreshSearches();
+      }
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
       continue;
     }
@@ -102,6 +114,12 @@ async function waitForSuggestions(prefix, requiredQueries) {
     if (allPresent) {
       return lastEntries;
     }
+
+    attempts += 1;
+    if (refreshSearches && attempts % 5 === 0) {
+      await refreshSearches();
+    }
+
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
 
@@ -118,12 +136,11 @@ async function run() {
 
   await waitForDebeziumConnector();
 
-  await sendSearch(topQuery);
-  await sendSearch(topQuery);
-  await sendSearch(topQuery);
-  await sendSearch(secondQuery);
+  await seedSearches(topQuery, secondQuery);
 
-  const apiEntries = await waitForSuggestions(prefix, [topQuery, secondQuery]);
+  const apiEntries = await waitForSuggestions(prefix, [topQuery, secondQuery], async () => {
+    await seedSearches(topQuery, secondQuery);
+  });
 
   const browser = await chromium.launch({ headless: true });
 

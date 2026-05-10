@@ -20,6 +20,6 @@ public class SearchEventProducer {
     }
 
     public void sendSearchEvent(String query) {
-        kafkaTemplate.send(searchEventsTopic, query);
+        kafkaTemplate.send(searchEventsTopic, query).join();
     }
 }
