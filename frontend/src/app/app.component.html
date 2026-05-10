@@ -3,6 +3,7 @@
 
   <form (ngSubmit)="onSubmit()" class="search-form">
     <input
+      data-testid="search-input"
       type="text"
       [value]="query"
       (input)="onInputChange($event.target.value)"
@@ -12,9 +13,9 @@
     <button type="submit">Search</button>
   </form>
 
-  <ul class="suggestions" *ngIf="showSuggestions">
+  <ul class="suggestions" *ngIf="showSuggestions" data-testid="suggestions-list">
     <li *ngFor="let s of suggestions$ | async">
-      <button type="button" (click)="onSelectSuggestion(s)">
+      <button data-testid="suggestion-item" type="button" (click)="onSelectSuggestion(s)">
         {{ s.query }}
       </button>
     </li>
