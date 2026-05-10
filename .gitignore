@@ -47,3 +47,7 @@ Thumbs.db
 
 ### Mac OS ###
 .DS_Store
+
+### Playwright temp ###
+.tmp-playwright/
+
