@@ -1,0 +1,31 @@
+@startuml
+title Search Ingestion and Redis Indexing Flow
+
+actor User
+participant "Frontend\n:4200" as Frontend
+participant "SearchController\nsearch-service :8082" as SearchController
+participant "SearchEventProducer" as Producer
+queue "Kafka topic\nsearch-events" as SearchEvents
+participant "SearchStatsTopology" as Topology
+database "PostgreSQL\nsearch_stats" as Postgres
+participant "Debezium Connect\n:8083" as Debezium
+queue "Kafka topic\ndb-changes.public.search_stats" as DbChanges
+participant "DebeziumConsumer\ncdc-service :8084" as Consumer
+participant "RedisSearchUpdater" as Updater
+database "Redis\nautocomplete:<prefix>" as Redis
+
+User -> Frontend: Type search query
+Frontend -> SearchController: GET /api/search?q=java
+SearchController -> Producer: sendSearchEvent("java")
+Producer -> SearchEvents: Produce search event
+SearchEvents -> Topology: Consume event
+Topology -> Topology: trim + lowercase + count
+Topology -> Postgres: Upsert query frequency
+Postgres -> Debezium: Capture row change (CDC)
+Debezium -> DbChanges: Publish payload.after event
+DbChanges -> Consumer: Consume CDC record
+Consumer -> Updater: updateFromAfter(query, frequency)
+Updater -> Updater: Generate prefixes (j, ja, jav, java)
+Updater -> Redis: ZADD autocomplete:<prefix> query score
+
+@enduml
