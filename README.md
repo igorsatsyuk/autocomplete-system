@@ -38,21 +38,11 @@ Production‑grade event‑driven autocomplete system built with Kafka Streams, 
 
 ## Architecture Flow
 
-```mermaid
-flowchart LR
-    UI[Frontend] -->|GET /api/search?q=java| SC[SearchController]
-    SC --> SEP[SearchEventProducer]
-    SEP -->|search-events| K[(Kafka)]
-    K --> SST[SearchStatsTopology]
-    SST --> PG[(PostgreSQL search_stats)]
-    PG -->|CDC| DBZ[Debezium Connect]
-    DBZ -->|db-changes.public.search_stats| DC[DebeziumConsumer]
-    DC --> RSU[RedisSearchUpdater]
-    RSU --> R[(Redis keys autocomplete:*)]
-    UI -->|GET /api/complete?q=ja| AC[AutocompleteController]
-    AC --> AQS[AutocompleteQueryService]
-    AQS --> R
-```
+![Autocomplete system context diagram](docs/diagrams/context-autocomplete-system.png)
+
+Source: `docs/diagrams/context-autocomplete-system.puml`
+
+Detailed sequence diagrams: [`docs/architecture.md`](docs/architecture.md)
 
 Core behavior:
 

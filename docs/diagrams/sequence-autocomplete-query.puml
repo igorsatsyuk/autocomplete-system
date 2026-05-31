@@ -1,0 +1,20 @@
+@startuml
+title Autocomplete Query Flow
+
+actor User
+participant "Frontend\n:4200" as Frontend
+participant "AutocompleteController\nautocomplete-service :8081" as Controller
+participant "AutocompleteQueryService" as QueryService
+database "Redis\nautocomplete:<prefix>" as Redis
+
+User -> Frontend: Type prefix "ja"
+Frontend -> Controller: GET /api/complete?q=ja&limit=10
+Controller -> QueryService: getSuggestions("ja", 10)
+QueryService -> QueryService: trim + lowercase validation
+QueryService -> Redis: ZREVRANGE autocomplete:ja 0 9
+Redis --> QueryService: ["java", "javascript", ...]
+QueryService --> Controller: Suggestion list
+Controller --> Frontend: 200 OK + JSON array
+Frontend --> User: Render ranked suggestions
+
+@enduml

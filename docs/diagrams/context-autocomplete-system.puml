@@ -1,0 +1,36 @@
+@startuml
+title Autocomplete System - Context Diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam defaultTextAlignment center
+
+actor "User" as user
+
+rectangle "Autocomplete System" as system {
+  rectangle "Frontend\n(Angular + Nginx, :4200)" as frontend
+  rectangle "Search Service\n(Spring Boot, :8082)" as search
+  rectangle "CDC Service\n(Spring Boot, :8084)" as cdc
+  rectangle "Autocomplete Service\n(Spring Boot, :8081)" as autocomplete
+}
+
+queue "Kafka\n(search-events, search-stats,\ndb-changes.public.search_stats)" as kafka
+database "PostgreSQL\n(search_stats)" as postgres
+database "Redis\n(autocomplete:<prefix>)" as redis
+rectangle "Debezium Connect\n(:8083)" as debezium
+
+user --> frontend : Submit query / request suggestions
+frontend --> search : GET /api/search?q=...
+search --> kafka : Publish search-events
+kafka --> search : Kafka Streams aggregate
+search --> postgres : Upsert query frequency
+postgres --> debezium : WAL CDC
+debezium --> kafka : Emit db-changes.public.search_stats
+kafka --> cdc : Consume Debezium envelope
+cdc --> redis : Update prefix sorted sets
+frontend --> autocomplete : GET /api/complete?q=...&limit=...
+autocomplete --> redis : Read top suggestions
+autocomplete --> frontend : Ranked suggestions
+
+@enduml
