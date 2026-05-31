@@ -25,6 +25,7 @@ frontend --> search : GET /api/search?q=...
 search --> kafka : Publish search-events
 kafka --> search : Kafka Streams aggregate
 search --> postgres : Upsert query frequency
+search --> kafka : Publish search-stats
 postgres --> debezium : WAL CDC
 debezium --> kafka : Emit db-changes.public.search_stats
 kafka --> cdc : Consume Debezium envelope
