@@ -285,7 +285,7 @@ def main() -> int:
     summary_lines.append("\n")
     append_summary("\n".join(summary_lines))
 
-    if gate_status != "OK":
+    if gate_status not in {"OK", "NONE"}:
         if args.allow_missing_new_code_metrics and is_missing_new_code_metrics_only(gate_status, conditions, measures):
             print(
                 "Quality Gate returned ERROR due to unavailable new-code metrics; treated as neutral for this run"
@@ -293,6 +293,9 @@ def main() -> int:
             return 0
         print("Quality Gate failed", file=sys.stderr)
         return 1
+
+    if gate_status == "NONE":
+        print("Quality Gate is not configured for this project; proceeding without quality gate check")
 
     return 0
 
