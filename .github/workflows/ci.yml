@@ -52,20 +52,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Backend test summary
-        if: always()
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          name: Backend Tests
-          path: |
-            backend/**/target/surefire-reports/TEST-*.xml
-            backend/**/target/failsafe-reports/TEST-*.xml
-          reporter: java-junit
-          fail-on-error: false
-          fail-on-empty: false
-          use-actions-summary: true
-
   # --- 2. Frontend -------------------------------------------------------------
   frontend:
     name: Frontend (Angular)
@@ -172,7 +158,6 @@ jobs:
         with:
           name: backend-jacoco-reports
           path: backend-coverage
-          if-no-artifact-found: ignore
 
       - name: SonarQube analysis (backend)
         if: steps.sonar-check.outputs.sonar_enabled == 'true'
@@ -402,11 +387,11 @@ jobs:
 
       - name: Download backend test reports artifact
         if: always()
+        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: backend-test-reports
           path: test-reports/backend
-          if-no-artifact-found: ignore
 
       - name: Compose Telegram message
         id: compose

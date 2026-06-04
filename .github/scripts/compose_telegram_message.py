@@ -29,7 +29,7 @@ def collect(root: Path, service: str, report_dir: str, warnings: list[str]) -> d
     if not root.exists():
         return totals
 
-    for file_path in root.rglob(f"*/target/{report_dir}/TEST-*.xml"):
+    for file_path in root.glob(f"**/target/{report_dir}/TEST-*.xml"):
         if service not in str(file_path):
             continue
         try:
@@ -114,7 +114,7 @@ def _normalize_conclusion(value: str) -> str:
 def _analysis_step_conclusion(job: dict) -> str:
     for step in job.get("steps", []):
         step_name = step.get("name", "")
-        if step_name in ("SonarQube analysis", "SonarQube analysis (frontend)"):
+        if step_name.startswith("SonarQube analysis"):
             return _normalize_conclusion(step.get("conclusion") or step.get("status") or "")
     return ""
 
@@ -127,7 +127,10 @@ def _normalize_sonar_status(job: dict) -> str:
         return "success"
     if analysis_conclusion in FAILURE_STATES:
         return "failure"
-    return _normalize_conclusion(job.get("conclusion") or job.get("status") or "unknown")
+    job_status = _normalize_conclusion(job.get("conclusion") or job.get("status") or "unknown")
+    if job_status == "success":
+        return "skipped"
+    return job_status
 
 
 def _sonar_service_name(job_name: str) -> str:
