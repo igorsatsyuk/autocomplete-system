@@ -10,41 +10,10 @@ permissions:
 
 jobs:
 
-  # --- 1. Shared library -------------------------------------------------------
-  common:
-    name: Build common
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: write
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
-        with:
-          distribution: temurin
-          java-version: 25
-          cache: maven
-
-      - name: Install common into local Maven cache
-        run: mvn -B -q -f common/pom.xml -DskipTests install
-
-      # Share the populated Maven cache with downstream jobs via upload-artifact
-      # (cheap: only the lt.satsyuk:common jar + metadata)
-      - name: Cache common jar for downstream jobs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: common-m2
-          path: ~/.m2/repository/lt/satsyuk/common
-          retention-days: 1
-
-  # --- 2. Backend unit tests ---------------------------------------------------
+  # --- 1. Backend unit tests ---------------------------------------------------
   backend-unit:
     name: Unit - ${{ matrix.service }}
     runs-on: ubuntu-latest
-    needs: common
     permissions:
       contents: read
       actions: write
@@ -64,21 +33,15 @@ jobs:
           java-version: 25
           cache: maven
 
-      - name: Restore common artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: common-m2
-          path: ~/.m2/repository/lt/satsyuk/common
-
       - name: Run unit tests
-        run: mvn -B -ntp -f ${{ matrix.service }}/pom.xml test jacoco:report
+        run: mvn -B -ntp -f backend/pom.xml -pl ${{ matrix.service }} -am test jacoco:report
 
       - name: Upload unit coverage report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: unit-coverage-${{ matrix.service }}
-          path: ${{ matrix.service }}/target/site/jacoco/jacoco.xml
+          path: backend/${{ matrix.service }}/target/site/jacoco/jacoco.xml
           if-no-files-found: error
           retention-days: 7
 
@@ -87,7 +50,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: unit-test-reports-${{ matrix.service }}
-          path: ${{ matrix.service }}/target/surefire-reports/TEST-*.xml
+          path: backend/${{ matrix.service }}/target/surefire-reports/TEST-*.xml
           if-no-files-found: warn
           retention-days: 7
 
@@ -97,17 +60,16 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           name: Unit Tests (${{ matrix.service }})
-          path: ${{ matrix.service }}/target/surefire-reports/TEST-*.xml
+          path: backend/${{ matrix.service }}/target/surefire-reports/TEST-*.xml
           reporter: java-junit
           fail-on-error: false
           fail-on-empty: false
           use-actions-summary: true
 
-  # --- 3. Backend integration tests --------------------------------------------
+  # --- 2. Backend integration tests --------------------------------------------
   backend-integration:
     name: Integration - ${{ matrix.service }}
     runs-on: ubuntu-latest
-    needs: common
     permissions:
       contents: read
       actions: write
@@ -127,21 +89,15 @@ jobs:
           java-version: 25
           cache: maven
 
-      - name: Restore common artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: common-m2
-          path: ~/.m2/repository/lt/satsyuk/common
-
       - name: Run integration tests
-        run: mvn -B -ntp -f ${{ matrix.service }}/pom.xml test-compile failsafe:integration-test failsafe:verify jacoco:report
+        run: mvn -B -ntp -f backend/pom.xml -pl ${{ matrix.service }} -am test-compile failsafe:integration-test failsafe:verify jacoco:report
 
       - name: Upload integration coverage report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: integration-coverage-${{ matrix.service }}
-          path: ${{ matrix.service }}/target/site/jacoco/jacoco.xml
+          path: backend/${{ matrix.service }}/target/site/jacoco/jacoco.xml
           if-no-files-found: error
           retention-days: 7
 
@@ -150,7 +106,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: integration-test-reports-${{ matrix.service }}
-          path: ${{ matrix.service }}/target/failsafe-reports/TEST-*.xml
+          path: backend/${{ matrix.service }}/target/failsafe-reports/TEST-*.xml
           if-no-files-found: warn
           retention-days: 7
 
@@ -160,13 +116,13 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           name: Integration Tests (${{ matrix.service }})
-          path: ${{ matrix.service }}/target/failsafe-reports/TEST-*.xml
+          path: backend/${{ matrix.service }}/target/failsafe-reports/TEST-*.xml
           reporter: java-junit
           fail-on-error: false
           fail-on-empty: false
           use-actions-summary: true
 
-  # --- 4. Frontend -------------------------------------------------------------
+  # --- 3. Frontend -------------------------------------------------------------
   frontend:
     name: Frontend (Angular)
     runs-on: ubuntu-latest
@@ -209,7 +165,7 @@ jobs:
         working-directory: frontend
         run: npm run build --if-present
 
-  # --- 5. SonarQube ------------------------------------------------------------
+  # --- 4. SonarQube ------------------------------------------------------------
   sonarqube:
     name: SonarQube - ${{ matrix.service }}
     runs-on: ubuntu-latest
@@ -238,12 +194,6 @@ jobs:
           distribution: temurin
           java-version: 25
           cache: maven
-
-      - name: Restore common artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: common-m2
-          path: ~/.m2/repository/lt/satsyuk/common
 
       - name: SonarQube skipped (missing token)
         if: ${{ env.SONAR_TOKEN == '' }}
@@ -330,12 +280,15 @@ jobs:
 
           cmd=(
             mvn -B -ntp
-            -f "${SERVICE}/pom.xml"
+            -f backend/pom.xml
+            -pl "${SERVICE}"
+            -am
             -DskipTests
             test-compile
             sonar:sonar
             "-Dsonar.host.url=${host_url}"
             "-Dsonar.projectKey=${project_key}"
+            "-Dsonar.projectName=${REPO_NAME}-backend"
             "-Dsonar.coverage.jacoco.xmlReportPaths=${unit_report},${integration_report}"
           )
 
@@ -345,7 +298,7 @@ jobs:
 
           "${cmd[@]}"
 
-  # --- 6. SonarQube – frontend -------------------------------------------------
+  # --- 5. SonarQube – frontend -------------------------------------------------
   sonarqube-frontend:
     name: SonarQube - frontend
     runs-on: ubuntu-latest
@@ -420,7 +373,7 @@ jobs:
           args: >
             -Dsonar.projectKey=${{ github.event.repository.name }}-frontend
 
-  # --- 7. Docker build (no push on PRs) ----------------------------------------
+  # --- 6. Docker build (no push on PRs) ----------------------------------------
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
@@ -432,27 +385,21 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Restore common artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: common-m2
-          path: ~/.m2/repository/lt/satsyuk/common
-
-      # Java services need the repo root as build context (they COPY common/)
+      # Java services need the repo root as build context (they COPY backend/)
       - name: Build autocomplete-service image
-        run: docker build -f autocomplete-service/Dockerfile -t autocomplete-service:ci .
+        run: docker build -f backend/autocomplete-service/Dockerfile -t autocomplete-service:ci .
 
       - name: Build search-service image
-        run: docker build -f search-service/Dockerfile -t search-service:ci .
+        run: docker build -f backend/search-service/Dockerfile -t search-service:ci .
 
       - name: Build cdc-service image
-        run: docker build -f cdc-service/Dockerfile -t cdc-service:ci .
+        run: docker build -f backend/cdc-service/Dockerfile -t cdc-service:ci .
 
       # Frontend uses its own directory as context
       - name: Build frontend image
         run: docker build -f frontend/Dockerfile -t frontend:ci frontend
 
-  # --- 8. Frontend E2E smoke (docker compose) -----------------------------------
+  # --- 7. Frontend E2E smoke (docker compose) -----------------------------------
   frontend-e2e-smoke:
     name: Frontend E2E Smoke
     runs-on: ubuntu-latest
@@ -510,7 +457,7 @@ jobs:
         if: always()
         run: docker compose down -v
 
-  # --- 9. Telegram notification -------------------------------------------------
+  # --- 8. Telegram notification -------------------------------------------------
   notify-telegram:
     name: Notify Telegram
     runs-on: ubuntu-latest

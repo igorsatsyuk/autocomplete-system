@@ -240,7 +240,7 @@ def needs_overall_status() -> str:
 def _is_relevant_job(name: str) -> bool:
     if name == "Notify Telegram":
         return False
-    if name in ("Build common", "Frontend (Angular)", "Docker Build", "Frontend E2E Smoke"):
+    if name in ("Frontend (Angular)", "Docker Build", "Frontend E2E Smoke"):
         return True
     return name.startswith(("Unit - ", "Integration - ", SONAR_JOB_PREFIX))
 

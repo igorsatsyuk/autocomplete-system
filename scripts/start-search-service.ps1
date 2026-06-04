@@ -18,15 +18,15 @@ function Get-EnvValue {
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $repoRoot ".env"
-$serviceDir = Join-Path $repoRoot "search-service"
-$servicePom = Join-Path $serviceDir "pom.xml"
+$backendDir = Join-Path $repoRoot "backend"
+$backendPom = Join-Path $backendDir "pom.xml"
 
 if (-not (Test-Path $envFile)) {
     throw "Не найден .env в корне репозитория."
 }
 
-if (-not (Test-Path $servicePom)) {
-    throw "Не найден search-service/pom.xml."
+if (-not (Test-Path $backendPom)) {
+    throw "Не найден backend/pom.xml."
 }
 
 $profile = Get-EnvValue -Path $envFile -Key "SPRING_PROFILES_ACTIVE" -Default "strict"
@@ -52,9 +52,9 @@ $env:MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE = $managementExposure
 $env:SERVER_PORT = $serverPort
 
 Write-Host "[INFO] Запускаю search-service с локальными override переменными..." -ForegroundColor Cyan
-Push-Location $serviceDir
+Push-Location $backendDir
 try {
-    mvn -B -ntp spring-boot:run
+    mvn -B -ntp -pl search-service -am spring-boot:run
 }
 finally {
     Pop-Location
