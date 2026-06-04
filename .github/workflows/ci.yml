@@ -180,6 +180,7 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
     strategy:
+      fail-fast: false
       matrix:
         service: [autocomplete-service, search-service, cdc-service]
 
@@ -296,7 +297,20 @@ jobs:
             cmd+=("-Dsonar.organization=${SONAR_ORGANIZATION}")
           fi
 
-          "${cmd[@]}"
+          for attempt in 1 2 3; do
+            if "${cmd[@]}"; then
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "SonarQube analysis failed after $attempt attempts."
+              exit 1
+            fi
+
+            sleep_seconds=$((attempt * 30))
+            echo "SonarQube analysis failed on attempt $attempt; retrying in ${sleep_seconds}s."
+            sleep "$sleep_seconds"
+          done
 
   # --- 5. SonarQube – frontend -------------------------------------------------
   sonarqube-frontend:
@@ -365,13 +379,36 @@ jobs:
 
       - name: SonarQube analysis (frontend)
         if: ${{ env.SONAR_TOKEN != '' && ((vars.SONAR_HOST_URL != '' && vars.SONAR_HOST_URL != 'https://sonarcloud.io') || vars.SONAR_ORGANIZATION != '') }}
-        uses: SonarSource/sonarqube-scan-action@59db25f34e16620e48ab4bb9e4a5dce155cb5432 # v8.0.0
         env:
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL || 'https://sonarcloud.io' }}
-        with:
-          projectBaseDir: frontend
-          args: >
-            -Dsonar.projectKey=${{ github.event.repository.name }}-frontend
+          REPO_NAME: ${{ github.event.repository.name }}
+        shell: bash
+        run: |
+          cmd=(
+            docker run --rm
+            --user "$(id -u):$(id -g)"
+            -e "SONAR_TOKEN=${SONAR_TOKEN}"
+            -e "SONAR_HOST_URL=${SONAR_HOST_URL}"
+            -v "${GITHUB_WORKSPACE}:/usr/src"
+            sonarsource/sonar-scanner-cli:11
+            -Dsonar.projectBaseDir=frontend
+            "-Dsonar.projectKey=${REPO_NAME}-frontend"
+          )
+
+          for attempt in 1 2 3; do
+            if "${cmd[@]}"; then
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "SonarQube frontend analysis failed after $attempt attempts."
+              exit 1
+            fi
+
+            sleep_seconds=$((attempt * 30))
+            echo "SonarQube frontend analysis failed on attempt $attempt; retrying in ${sleep_seconds}s."
+            sleep "$sleep_seconds"
+          done
 
   # --- 6. Docker build (no push on PRs) ----------------------------------------
   docker:
