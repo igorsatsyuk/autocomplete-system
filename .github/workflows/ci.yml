@@ -206,6 +206,36 @@ jobs:
 
           "${cmd[@]}"
 
+      - name: Locate backend Sonar report-task
+        if: steps.sonar-check.outputs.sonar_enabled == 'true'
+        id: report-task
+        shell: bash
+        run: |
+          report_task=$(find backend -path "*/target/sonar/report-task.txt" -print | head -1)
+          if [ -z "$report_task" ]; then
+            echo "Unable to find backend Sonar report-task.txt" >&2
+            exit 1
+          fi
+          echo "path=$report_task" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for Quality Gate and publish backend Sonar summary
+        if: steps.sonar-check.outputs.sonar_enabled == 'true'
+        shell: bash
+        env:
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          extra_args=()
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            extra_args+=("--allow-missing-new-code-metrics")
+          fi
+
+          python3 .github/scripts/sonar_quality_gate_report.py \
+            --component-name "backend" \
+            --project-key "${REPO_NAME}-backend" \
+            --report-task-file "${{ steps.report-task.outputs.path }}" \
+            --timeout-seconds 900 \
+            "${extra_args[@]}"
+
   # --- 4. SonarQube – frontend -------------------------------------------------
   sonarqube-frontend:
     name: SonarQube - frontend
@@ -284,6 +314,24 @@ jobs:
             -Dsonar.test.inclusions=**/*.spec.ts
             -Dsonar.javascript.lcov.reportPaths=coverage/autocomplete-frontend/lcov.info
             ${{ vars.SONAR_ORGANIZATION != '' && format('-Dsonar.organization={0}', vars.SONAR_ORGANIZATION) || '' }}
+
+      - name: Wait for Quality Gate and publish frontend Sonar summary
+        if: steps.sonar-check.outputs.sonar_enabled == 'true'
+        shell: bash
+        env:
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          report_task="frontend/.scannerwork/report-task.txt"
+          if [ ! -f "$report_task" ]; then
+            echo "Unable to find frontend Sonar report-task.txt at $report_task" >&2
+            exit 1
+          fi
+
+          python3 .github/scripts/sonar_quality_gate_report.py \
+            --component-name "frontend" \
+            --project-key "${REPO_NAME}-frontend" \
+            --report-task-file "$report_task" \
+            --timeout-seconds 900
 
   # --- 5. Docker build (no push on PRs) ----------------------------------------
   docker:
