@@ -18,15 +18,15 @@ function Get-EnvValue {
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $repoRoot ".env"
-$serviceDir = Join-Path $repoRoot "cdc-service"
-$servicePom = Join-Path $serviceDir "pom.xml"
+$backendDir = Join-Path $repoRoot "backend"
+$backendPom = Join-Path $backendDir "pom.xml"
 
 if (-not (Test-Path $envFile)) {
     throw "Не найден .env в корне репозитория."
 }
 
-if (-not (Test-Path $servicePom)) {
-    throw "Не найден cdc-service/pom.xml."
+if (-not (Test-Path $backendPom)) {
+    throw "Не найден backend/pom.xml."
 }
 
 $profile = Get-EnvValue -Path $envFile -Key "SPRING_PROFILES_ACTIVE" -Default "strict"
@@ -41,9 +41,9 @@ $env:SPRING_DATA_REDIS_PORT = $redisPort
 $env:SERVER_PORT = $serverPort
 
 Write-Host "[INFO] Запускаю cdc-service с локальными override переменными..." -ForegroundColor Cyan
-Push-Location $serviceDir
+Push-Location $backendDir
 try {
-    mvn -B -ntp spring-boot:run
+    mvn -B -ntp -pl cdc-service -am spring-boot:run
 }
 finally {
     Pop-Location

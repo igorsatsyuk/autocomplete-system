@@ -52,20 +52,20 @@ Thanks for contributing. This guide explains how to work in this repository safe
    docker compose ps
    ```
 
-5. (Optional for local non-Docker app runs) install shared module first:
+5. (Optional for local non-Docker app runs) build backend modules:
    ```powershell
-   Set-Location .\common
-   mvn -B -DskipTests install
+   Set-Location .\backend
+   mvn -B -DskipTests package
    ```
 
 ---
 
 ## Project Structure
 
-- `common/` - shared runtime contracts (`KafkaTopics`, `RedisKeys`, DTO/util classes)
-- `search-service/` - write side: search intake + Kafka Streams aggregation + PostgreSQL writes
-- `cdc-service/` - Debezium CDC consumer + Redis prefix index updater
-- `autocomplete-service/` - query side: suggestions from Redis
+- `backend/common/` - shared runtime contracts (`KafkaTopics`, `RedisKeys`, DTO/util classes)
+- `backend/search-service/` - write side: search intake + Kafka Streams aggregation + PostgreSQL writes
+- `backend/cdc-service/` - Debezium CDC consumer + Redis prefix index updater
+- `backend/autocomplete-service/` - query side: suggestions from Redis
 - `frontend/` - Angular UI + API proxy/nginx
 - `infra/` - bootstrap assets for Kafka, Debezium, PostgreSQL, Redis
 - `docker-compose.yml` - full local environment
@@ -86,7 +86,7 @@ Required rules:
 - Parse Debezium envelope via `payload.after`; do not assume flat CDC JSON.
 - Use identifiers from `common` (`KafkaTopics`, `RedisKeys`) instead of hardcoding names.
 - Keep migration files mirrored between:
-  - `search-service/src/main/resources/db/migration/`
+  - `backend/search-service/src/main/resources/db/migration/`
   - `infra/postgres/`
 - Keep `frontend/proxy.conf.json` and `frontend/nginx.conf` aligned for API route changes.
 
@@ -159,32 +159,28 @@ ci: add telegram notification summary step
 
 ## Testing
 
-Backend modules are independent Maven projects.
+Backend modules are a multi-module Maven reactor under `backend/`.
 
 ### Backend unit tests
 
 ```powershell
-Set-Location .\search-service
+Set-Location .\backend
 mvn -B -ntp test
-
-Set-Location ..\cdc-service
-mvn -B -ntp test
-
-Set-Location ..\autocomplete-service
-mvn -B -ntp test
+mvn -B -ntp -pl search-service -am test
+mvn -B -ntp -pl cdc-service -am test
+mvn -B -ntp -pl autocomplete-service -am test
 ```
 
 ### Backend integration tests
 
 ```powershell
-Set-Location .\search-service
+Set-Location .\backend
 mvn -B -ntp test-compile failsafe:integration-test failsafe:verify
 
-Set-Location ..\cdc-service
-mvn -B -ntp test-compile failsafe:integration-test failsafe:verify
-
-Set-Location ..\autocomplete-service
-mvn -B -ntp test-compile failsafe:integration-test failsafe:verify
+# Or target one service:
+mvn -B -ntp -pl search-service -am test-compile failsafe:integration-test failsafe:verify
+mvn -B -ntp -pl cdc-service -am test-compile failsafe:integration-test failsafe:verify
+mvn -B -ntp -pl autocomplete-service -am test-compile failsafe:integration-test failsafe:verify
 ```
 
 ### Frontend checks
@@ -193,6 +189,7 @@ mvn -B -ntp test-compile failsafe:integration-test failsafe:verify
 Set-Location .\frontend
 npm ci
 npm run lint --if-present
+# Uses ChromeHeadlessCI with GPU disabled for stable local/CI headless runs.
 npm run test:ci
 npm run build --if-present
 ```

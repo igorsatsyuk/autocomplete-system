@@ -151,41 +151,34 @@ docker compose exec redis redis-cli ZREVRANGE autocomplete:ja 0 9 WITHSCORES
 
 ## Running Tests
 
-Backend modules are independent Maven projects. Install `common` first when running outside Docker.
+Backend modules are a multi-module Maven reactor under `backend/`.
 
 ### Backend Tests
 
-Install shared module:
+Run all backend unit tests:
 
 ```powershell
-Set-Location .\common
-mvn -B -DskipTests install
+Set-Location .\backend
+mvn -B -ntp test
 ```
 
-Run unit tests only (`*Test` via Surefire):
+Run unit tests for one service only (`*Test` via Surefire):
 
 ```powershell
-Set-Location ..\search-service
-mvn -B -ntp test
-
-Set-Location ..\cdc-service
-mvn -B -ntp test
-
-Set-Location ..\autocomplete-service
-mvn -B -ntp test
+mvn -B -ntp -pl search-service -am test
+mvn -B -ntp -pl cdc-service -am test
+mvn -B -ntp -pl autocomplete-service -am test
 ```
 
 Run integration tests only (`*IT` via Failsafe; requires Docker, otherwise tests skip safely):
 
 ```powershell
-Set-Location ..\search-service
 mvn -B -ntp test-compile failsafe:integration-test failsafe:verify
 
-Set-Location ..\cdc-service
-mvn -B -ntp test-compile failsafe:integration-test failsafe:verify
-
-Set-Location ..\autocomplete-service
-mvn -B -ntp test-compile failsafe:integration-test failsafe:verify
+# Or target one service:
+mvn -B -ntp -pl search-service -am test-compile failsafe:integration-test failsafe:verify
+mvn -B -ntp -pl cdc-service -am test-compile failsafe:integration-test failsafe:verify
+mvn -B -ntp -pl autocomplete-service -am test-compile failsafe:integration-test failsafe:verify
 ```
 
 Known backend test classes:
@@ -202,7 +195,7 @@ Install dependencies and run tests from `frontend/` directory:
 Set-Location .\frontend
 npm ci
 
-# Run tests in CI mode (headless, single run)
+# Run tests in CI mode (ChromeHeadlessCI, single run)
 npm run test:ci
 
 # Or run tests in watch mode (local development)
@@ -263,42 +256,40 @@ GitHub Actions workflow: `.github/workflows/ci.yml` runs on every push to `main`
 
 ### Job sequence
 
-1. **common** — Builds shared module and caches it for downstream jobs.
-
-2. **backend-unit** (matrix: autocomplete-service, search-service, cdc-service)
-   - Runs `mvn test` for each backend service.
+1. **backend-unit** (matrix: autocomplete-service, search-service, cdc-service)
+   - Runs `mvn -f backend/pom.xml -pl <service> -am test` for each backend service.
    - Uploads unit coverage reports (`jacoco.xml`) and test reports (`TEST-*.xml`).
 
-3. **backend-integration** (matrix: autocomplete-service, search-service, cdc-service)
+2. **backend-integration** (matrix: autocomplete-service, search-service, cdc-service)
    - Requires Docker; tests skip gracefully if unavailable.
-   - Runs `mvn test-compile failsafe:integration-test failsafe:verify` for each service.
+   - Runs `mvn -f backend/pom.xml -pl <service> -am test-compile failsafe:integration-test failsafe:verify` for each service.
    - Uploads integration coverage reports and test reports.
 
-4. **frontend** 
+3. **frontend**
    - Runs `npm ci`, lint (`npm run lint`), test (`npm run test:ci`), build (`npm run build`).
    - Uploads frontend coverage (`lcov.info`).
 
-5. **sonarqube** (matrix: autocomplete-service, search-service, cdc-service)
+4. **sonarqube** (matrix: autocomplete-service, search-service, cdc-service)
    - Requires `SONAR_TOKEN` secret and appropriate `SONAR_HOST_URL` / `SONAR_ORGANIZATION` repository variables.
    - Skips gracefully if SonarCloud is used but `SONAR_ORGANIZATION` is missing.
    - Runs after backend-unit and backend-integration complete.
 
-6. **sonarqube-frontend**
+5. **sonarqube-frontend**
    - Frontend SonarQube analysis (similar conditions as backend sonarqube).
    - Runs after frontend job completes.
 
-7. **docker**
+6. **docker**
    - Builds all Docker images: `autocomplete-service`, `search-service`, `cdc-service`, `frontend`.
    - Does not push; useful for validating builds on PRs.
    - Runs after backend-unit, backend-integration, and frontend complete.
 
-8. **frontend-e2e-smoke**
+7. **frontend-e2e-smoke**
    - Runs after the `frontend` job; requires Docker Compose.
    - Starts the full stack (`docker compose up -d --build`), waits for `http://localhost:4200`.
    - Runs `npm run test:e2e-smoke` from `frontend/` — seeds search events, polls autocomplete API, verifies seeded suggestions order by score and click-through behavior.
    - Dumps compose logs on failure; always tears down with `docker compose down -v`.
 
-9. **notify-telegram** (final stage)
+8. **notify-telegram** (final stage)
    - Sends a Telegram notification with overall CI status including `frontend-e2e-smoke` result.
    - Requires `TELEGRAM_TO` and `TELEGRAM_TOKEN` secrets; skips silently if unavailable.
    - Runs after all other jobs, regardless of their result.
@@ -330,13 +321,13 @@ All services are containerized. Build images from the repo root using `docker-co
 docker compose build
 
 # Or build individual images
-docker build -f search-service/Dockerfile -t search-service .
-docker build -f cdc-service/Dockerfile -t cdc-service .
-docker build -f autocomplete-service/Dockerfile -t autocomplete-service .
+docker build -f backend/search-service/Dockerfile -t search-service .
+docker build -f backend/cdc-service/Dockerfile -t cdc-service .
+docker build -f backend/autocomplete-service/Dockerfile -t autocomplete-service .
 docker build -f frontend/Dockerfile -t frontend frontend
 ```
 
-**Note:** Java services use the repo root as build context (they `COPY common/`); frontend uses its own directory context.
+**Note:** Java services use the repo root as build context (they `COPY backend/`); frontend uses its own directory context.
 
 ## Local Development (Without Docker for App Processes)
 
@@ -348,14 +339,14 @@ If you run services from IDE/terminal, keep infra in Docker and run apps locally
 docker compose up -d postgres redis zookeeper kafka kafka-init debezium debezium-init kafka-ui
 ```
 
-2) Build/install shared module:
+2) Build backend services:
 
 ```powershell
-Set-Location .\common
-mvn -B -DskipTests install
+Set-Location .\backend
+mvn -B -DskipTests package
 ```
 
-3) Run Java services from each module root (`search-service`, `cdc-service`, `autocomplete-service`) and frontend from `frontend`.
+3) Run Java services with the scripts in `scripts/`, or from `backend/` with `mvn -B -ntp -pl <service> -am spring-boot:run`; run frontend from `frontend`.
 
 Note: default app configs use Docker hostnames (`kafka`, `postgres`, `redis`), so for fully local process networking adjust `application.yml` values to `localhost` as needed.
 
@@ -363,12 +354,13 @@ Note: default app configs use Docker hostnames (`kafka`, `postgres`, `redis`), s
 
 - Critical infra/runtime values are parameterized via `.env` in `docker-compose.yml` (DB credentials, connector settings, exposed ports).
 - Published service ports are bound to `127.0.0.1` by default to reduce accidental exposure outside the host.
+- Compose starts `cdc-service` after `kafka-init` and `debezium-init` so CDC topic subscription receives `db-changes.public.search_stats` consistently on fresh stacks.
 - In Compose, `search-service` datasource is derived from `POSTGRES_*`; use `SPRING_DATASOURCE_*` when running `search-service` outside Compose.
 - Java services run with `SPRING_PROFILES_ACTIVE=strict` by default in Compose.
 - `cdc-service` uses `AUTOCOMPLETE_CLEAR_INDEX_TIMEOUT` (default `PT5M` = 5 minutes) to bound the blocking clear operation during TRUNCATE+rebuild.
 - Keep `frontend/proxy.conf.json` and `frontend/nginx.conf` aligned when API routes change.
 - Schema changes should be mirrored in both:
-  - `search-service/src/main/resources/db/migration/`
+  - `backend/search-service/src/main/resources/db/migration/`
   - `infra/postgres/`
 - Do not bypass CDC by writing from `search-service` directly to Redis.
 - Keep lowercase normalization in write/index/query path.
@@ -460,7 +452,7 @@ docker compose exec kafka kafka-topics --bootstrap-server kafka:9092 --list
 
 ### Before Committing
 
-1. Run backend unit tests: `mvn -B test` from each service directory.
+1. Run backend unit tests: `mvn -B test` from `backend/`, or target a service with `mvn -B -pl <service> -am test`.
 2. Run frontend tests: `npm run test:ci` from `frontend/`.
 3. Run E2E smoke test if pipeline behavior was affected: `npm run test:e2e-smoke` from `frontend/` (requires stack to be up).
 4. Verify build: `docker compose build` (or individual `docker build` commands).
@@ -468,9 +460,9 @@ docker compose exec kafka kafka-topics --bootstrap-server kafka:9092 --list
 
 ### Operational Checklist
 
-- **Schema changes:** Mirror Flyway migrations between `search-service/src/main/resources/db/migration/` and `infra/postgres/` before merging.
+- **Schema changes:** Mirror Flyway migrations between `backend/search-service/src/main/resources/db/migration/` and `infra/postgres/` before merging.
 - **API route changes:** Keep `frontend/proxy.conf.json` and `frontend/nginx.conf` in sync.
-- **Kafka/Redis identifiers:** Add new topics/keys to `common/src/main/java/lt/satsyuk/common/` first, then reference via `KafkaTopics` and `RedisKeys` constants.
+- **Kafka/Redis identifiers:** Add new topics/keys to `backend/common/src/main/java/lt/satsyuk/common/` first, then reference via `KafkaTopics` and `RedisKeys` constants.
 - **Lowercase normalization:** Preserve in `SearchStatsTopology`, `DebeziumConsumer`, `RedisSearchUpdater`, and `AutocompleteQueryService`.
 - **Debezium envelope:** Always parse `payload.after` when reading CDC events; assume envelope format.
 
@@ -484,10 +476,10 @@ docker compose exec kafka kafka-topics --bootstrap-server kafka:9092 --list
 ## Project Structure
 
 - `docker-compose.yml`: full local stack.
-- `common/`: shared constants and contracts.
-- `search-service/`: command side + Kafka Streams aggregation.
-- `cdc-service/`: Debezium topic consumer + Redis indexing.
-- `autocomplete-service/`: Redis-backed suggestion API.
+- `backend/common/`: shared constants and contracts.
+- `backend/search-service/`: command side + Kafka Streams aggregation.
+- `backend/cdc-service/`: Debezium topic consumer + Redis indexing.
+- `backend/autocomplete-service/`: Redis-backed suggestion API.
 - `frontend/`: Angular UI and API proxy.
 - `infra/`: Kafka topic init, Debezium connector config, PostgreSQL bootstrap SQL.
 

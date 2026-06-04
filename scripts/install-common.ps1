@@ -2,17 +2,17 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$commonDir = Join-Path $repoRoot "common"
-$commonPom = Join-Path $commonDir "pom.xml"
+$backendDir = Join-Path $repoRoot "backend"
+$backendPom = Join-Path $backendDir "pom.xml"
 
-if (-not (Test-Path $commonPom)) {
-    throw "Не найден common/pom.xml. Проверьте структуру репозитория."
+if (-not (Test-Path $backendPom)) {
+    throw "Не найден backend/pom.xml. Проверьте структуру репозитория."
 }
 
 Write-Host "[INFO] Устанавливаю модуль common в локальный Maven-репозиторий..." -ForegroundColor Cyan
-Push-Location $commonDir
+Push-Location $backendDir
 try {
-    mvn -B -DskipTests install
+    mvn -B -DskipTests -pl common install
     Write-Host "[OK] common установлен." -ForegroundColor Green
 }
 finally {

@@ -236,7 +236,7 @@ services:
   autocomplete-service:
     build:
       context: .
-      dockerfile: autocomplete-service/Dockerfile
+      dockerfile: backend/autocomplete-service/Dockerfile
     depends_on:
       - redis
     environment:
@@ -255,7 +255,7 @@ services:
   search-service:
     build:
       context: .
-      dockerfile: search-service/Dockerfile
+      dockerfile: backend/search-service/Dockerfile
     depends_on:
       - kafka
       - postgres
@@ -279,10 +279,14 @@ services:
   cdc-service:
     build:
       context: .
-      dockerfile: cdc-service/Dockerfile
+      dockerfile: backend/cdc-service/Dockerfile
     depends_on:
-      - debezium-init
-      - redis
+      debezium-init:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-strict}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:?SPRING_KAFKA_BOOTSTRAP_SERVERS is required}

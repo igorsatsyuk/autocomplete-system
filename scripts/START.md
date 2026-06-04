@@ -4,7 +4,7 @@
 # Register Debezium Connector (one-off, without pulling search-service)
 docker compose run --rm --no-deps debezium-init
 
-# Install Common
+# Optional: install Common only
 .\scripts\install-common.ps1
 
 # Start Services

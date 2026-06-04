@@ -7,15 +7,13 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
-UNIT_ROOT = Path("test-reports/unit")
-INTEGRATION_ROOT = Path("test-reports/integration")
+BACKEND_TEST_ROOT = Path("test-reports/backend")
 SONAR_JOB_PREFIX = "SonarQube - "
 
 FAILURE_STATES = {"failure", "cancelled", "timed_out", "action_required"}
 SUCCESS_STATES = {"success", "skipped", "neutral"}
 JOB_RESULT_FIELDS = (
-    ("backend-unit", "BACKEND_UNIT_RESULT"),
-    ("backend-integration", "BACKEND_INT_RESULT"),
+    ("backend", "BACKEND_RESULT"),
     ("frontend", "FRONTEND_RESULT"),
     ("sonarqube", "SONAR_BACKEND_RESULT"),
     ("sonarqube-frontend", "SONAR_FRONTEND_RESULT"),
@@ -26,12 +24,12 @@ TOTAL_LINE = "- Total: {value}"
 SKIPPED_LINE = "- ⏭️ Skipped: {value}"
 
 
-def collect(root: Path, service: str, warnings: list[str]) -> dict[str, int]:
+def collect(root: Path, service: str, report_dir: str, warnings: list[str]) -> dict[str, int]:
     totals = {"total": 0, "failed": 0, "skipped": 0}
     if not root.exists():
         return totals
 
-    for file_path in root.rglob("TEST-*.xml"):
+    for file_path in root.glob(f"**/target/{report_dir}/TEST-*.xml"):
         if service not in str(file_path):
             continue
         try:
@@ -82,15 +80,14 @@ def fetch_run_jobs(warnings: list[str]) -> list[dict]:
 
 def _discover_services_from_artifacts() -> set[str]:
     services: set[str] = set()
-    for root, prefix in (
-        (UNIT_ROOT, "unit-test-reports-"),
-        (INTEGRATION_ROOT, "integration-test-reports-"),
-    ):
-        if not root.exists():
-            continue
-        for artifact_dir in root.iterdir():
-            if artifact_dir.is_dir() and artifact_dir.name.startswith(prefix):
-                services.add(artifact_dir.name[len(prefix):])
+    if BACKEND_TEST_ROOT.exists():
+        for file_path in BACKEND_TEST_ROOT.rglob("TEST-*.xml"):
+            parts = file_path.parts
+            if "target" not in parts:
+                continue
+            target_index = parts.index("target")
+            if target_index > 0:
+                services.add(parts[target_index - 1])
     return services
 
 
@@ -117,7 +114,7 @@ def _normalize_conclusion(value: str) -> str:
 def _analysis_step_conclusion(job: dict) -> str:
     for step in job.get("steps", []):
         step_name = step.get("name", "")
-        if step_name in ("SonarQube analysis", "SonarQube analysis (frontend)"):
+        if step_name.startswith("SonarQube analysis"):
             return _normalize_conclusion(step.get("conclusion") or step.get("status") or "")
     return ""
 
@@ -130,7 +127,10 @@ def _normalize_sonar_status(job: dict) -> str:
         return "success"
     if analysis_conclusion in FAILURE_STATES:
         return "failure"
-    return _normalize_conclusion(job.get("conclusion") or job.get("status") or "unknown")
+    job_status = _normalize_conclusion(job.get("conclusion") or job.get("status") or "unknown")
+    if job_status == "success":
+        return "skipped"
+    return job_status
 
 
 def _sonar_service_name(job_name: str) -> str:
@@ -142,7 +142,7 @@ def _sonar_service_name(job_name: str) -> str:
 
 
 def get_sonar_statuses(run_jobs: list[dict], services: list[str]) -> dict[str, str]:
-    statuses = dict.fromkeys([*services, "frontend"], "unknown")
+    statuses = dict.fromkeys(["backend", "frontend"], "unknown")
     for job in run_jobs:
         service = _sonar_service_name(job.get("name", ""))
         if service and service in statuses:
@@ -220,8 +220,7 @@ def metric_section(title: str, entries: list[tuple[str, int, bool]]) -> list[str
 
 def needs_overall_status() -> str:
     tracked_results = [
-        os.environ.get("BACKEND_UNIT_RESULT", "unknown"),
-        os.environ.get("BACKEND_INT_RESULT", "unknown"),
+        os.environ.get("BACKEND_RESULT", "unknown"),
         os.environ.get("FRONTEND_RESULT", "unknown"),
         os.environ.get("SONAR_BACKEND_RESULT", "unknown"),
         os.environ.get("SONAR_FRONTEND_RESULT", "unknown"),
@@ -240,7 +239,7 @@ def needs_overall_status() -> str:
 def _is_relevant_job(name: str) -> bool:
     if name == "Notify Telegram":
         return False
-    if name in ("Build common", "Frontend (Angular)", "Docker Build", "Frontend E2E Smoke"):
+    if name in ("Backend (Maven)", "Frontend (Angular)", "Docker Build", "Frontend E2E Smoke"):
         return True
     return name.startswith(("Unit - ", "Integration - ", SONAR_JOB_PREFIX))
 
@@ -266,7 +265,7 @@ def workflow_overall_status(run_jobs: list[dict]) -> str:
 def append_sonar_checks(lines: list[str], services: list[str], sonar_statuses: dict[str, str]) -> None:
     lines.append("")
     lines.append("<b>SonarQube checks</b>")
-    for service in services + ["frontend"]:
+    for service in ["backend", "frontend"]:
         counts = sonar_counts(sonar_statuses.get(service, "unknown"))
         sonar_lines = positive_count_lines(
             [
@@ -285,9 +284,9 @@ def append_sonar_checks(lines: list[str], services: list[str], sonar_statuses: d
 
 def append_test_sections(lines: list[str], services: list[str], warnings: list[str]) -> None:
     for service in services:
-        unit = collect(UNIT_ROOT, service, warnings)
+        unit = collect(BACKEND_TEST_ROOT, service, "surefire-reports", warnings)
         unit_passed = max(unit["total"] - unit["failed"] - unit["skipped"], 0)
-        integration = collect(INTEGRATION_ROOT, service, warnings)
+        integration = collect(BACKEND_TEST_ROOT, service, "failsafe-reports", warnings)
         integration_passed = max(integration["total"] - integration["failed"] - integration["skipped"], 0)
 
         unit_section = metric_section(
