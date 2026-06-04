@@ -181,6 +181,7 @@ jobs:
 
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         service: [autocomplete-service, search-service, cdc-service]
 
@@ -297,12 +298,12 @@ jobs:
             cmd+=("-Dsonar.organization=${SONAR_ORGANIZATION}")
           fi
 
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             if "${cmd[@]}"; then
               exit 0
             fi
 
-            if [ "$attempt" -eq 3 ]; then
+            if [ "$attempt" -eq 5 ]; then
               echo "SonarQube analysis failed after $attempt attempts."
               exit 1
             fi
@@ -387,6 +388,7 @@ jobs:
           cmd=(
             docker run --rm
             --user "$(id -u):$(id -g)"
+            -e "SONAR_USER_HOME=/tmp/.sonar"
             -e "SONAR_TOKEN=${SONAR_TOKEN}"
             -e "SONAR_HOST_URL=${SONAR_HOST_URL}"
             -v "${GITHUB_WORKSPACE}:/usr/src"
@@ -395,12 +397,12 @@ jobs:
             "-Dsonar.projectKey=${REPO_NAME}-frontend"
           )
 
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             if "${cmd[@]}"; then
               exit 0
             fi
 
-            if [ "$attempt" -eq 3 ]; then
+            if [ "$attempt" -eq 5 ]; then
               echo "SonarQube frontend analysis failed after $attempt attempts."
               exit 1
             fi
