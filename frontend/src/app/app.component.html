@@ -2,7 +2,9 @@
   <h1>Autocomplete Demo</h1>
 
   <form (ngSubmit)="onSubmit()" class="search-form">
+    <label class="visually-hidden" for="search-input">Search query</label>
     <input
+      id="search-input"
       data-testid="search-input"
       type="text"
       [value]="query"
