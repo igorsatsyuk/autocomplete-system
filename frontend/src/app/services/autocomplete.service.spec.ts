@@ -147,7 +147,7 @@ describe('AutocompleteService', () => {
       const req = http.expectOne(r => r.url === '/api/complete' && r.params.get('q') === 'ja');
       req.flush(mockEntries);
 
-      expect(emitted.length).toBe(1);
+      expect(emitted).toHaveSize(1);
       expect(emitted[0]).toEqual(mockEntries);
     }));
 
@@ -166,7 +166,7 @@ describe('AutocompleteService', () => {
       tick(150);
       http.expectNone('/api/complete');
 
-      expect(emitted.length).toBe(1);
+      expect(emitted).toHaveSize(1);
     }));
 
     it('cancels previous request on new query (switchMap)', fakeAsync(() => {
@@ -186,7 +186,7 @@ describe('AutocompleteService', () => {
       const secondReq = http.expectOne(r => r.url === '/api/complete' && r.params.get('q') === 'jav');
       secondReq.flush([{ query: 'javascript', score: 8 }]);
 
-      expect(results.length).toBe(1);
+      expect(results).toHaveSize(1);
       expect(results[0][0].query).toBe('javascript');
     }));
   });
