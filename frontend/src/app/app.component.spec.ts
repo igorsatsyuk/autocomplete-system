@@ -103,7 +103,7 @@ describe('AppComponent', () => {
       fixture.detectChanges();
 
       const items = fixture.debugElement.queryAll(By.css('ul.suggestions li'));
-      expect(items.length).toBe(2);
+      expect(items).toHaveSize(2);
       expect(items[0].nativeElement.textContent.trim()).toBe('java');
       expect(items[1].nativeElement.textContent.trim()).toBe('javascript');
     }));
