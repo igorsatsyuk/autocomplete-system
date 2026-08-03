@@ -181,7 +181,7 @@ jobs:
             -Djacoco.skip=true
             -DskipTests
             verify
-            sonar:sonar
+            org.sonarsource.scanner.maven:sonar-maven-plugin:5.5.0.6356:sonar
             "-Dsonar.host.url=${host_url}"
             "-Dsonar.projectKey=${REPO_NAME}-backend"
             "-Dsonar.projectName=${REPO_NAME}-backend"
