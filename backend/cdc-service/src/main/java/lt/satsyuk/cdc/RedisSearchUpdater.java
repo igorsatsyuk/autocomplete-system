@@ -63,7 +63,7 @@ public class RedisSearchUpdater {
                     .flatMap(prefix -> {
                         String key = redisPrefix + prefix;
                         return redis.opsForZSet()
-                                .add(key, normalized, count)
+                                .add(key, normalized, (double) count)
                                 .then();
                     })
                     .then()
