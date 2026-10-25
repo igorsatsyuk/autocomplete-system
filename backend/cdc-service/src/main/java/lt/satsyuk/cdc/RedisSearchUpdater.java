@@ -43,6 +43,7 @@ public class RedisSearchUpdater {
         this.clearIndexTimeout = clearIndexTimeout;
     }
 
+    @SuppressWarnings("java:S1905") // S9395 requires this explicit cast to document possible precision loss.
     public void updateQueryScore(String query, long count) {
         if (query == null || query.isBlank()) {
             return;
